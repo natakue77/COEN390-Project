@@ -14,13 +14,57 @@
         app:title="Tips and Advice"
         app:titleTextColor="@android:color/white" />
 
-    <TextView
+
+
+    <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="80dp"
-        android:gravity="center"
-        android:text="Tip/Advice Screen"
-        android:textSize="26sp"
-        android:textStyle="bold" />
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Set Your Fitness Goal"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="10dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Choose your goal to get personalized workout tips."
+                android:textSize="16sp"
+                android:layout_marginBottom="20dp" />
+
+            <Spinner
+                android:id="@+id/goalSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Tips For Your Goal"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="15dp" />
+
+            <TextView
+                android:id="@+id/tipsTextView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Select a goal to see your tips."
+                android:textSize="17sp"
+                android:lineSpacingExtra="8dp" />
+
+        </LinearLayout>
+
+    </ScrollView>
 
 </LinearLayout>
