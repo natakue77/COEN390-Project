@@ -45,11 +45,12 @@ public class RepCounter {
                 if (depth >= MIN_REP_DEPTH && velocity >MOVE_SPEED){
                     phase = Phase.RISING;
                 }
-                if (depth >= MIN_REP_DEPTH && height>= Theight && Math.abs(velocity) < MOVE_SPEED){phase= phase.READY;}
+                if (depth >= MIN_REP_DEPTH && height>= Theight && Math.abs(velocity) < MOVE_SPEED){phase= Phase.READY;}
+                break; // without this, LOWERING fell through into RISING and counted a rep on almost every sample
 
             case RISING:
                 float repDepth = Theight - Bheight;
-                float tol = Math.max (0.3f, repDepth*0.20f);
+                float tol = Math.max (0.03f, repDepth*0.20f); // 3 cm (was 0.3f = 30 cm, larger than a whole rep)
                 boolean neartop = height >= Theight -tol;
                 if (neartop){
                     if (Math.abs(velocity) < MOVE_SPEED) {

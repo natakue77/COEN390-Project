@@ -47,6 +47,12 @@ android:required="true" />
             </intent-filter>
         </activity>
         <activity
+            android:name=".HeartRateActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ExerciseListActivity"
+            android:exported="false" />
+        <activity
             android:name=".Option1Activity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />

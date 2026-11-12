@@ -1,26 +1,158 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:fitsSystemWindows="true"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:background="#111214">
 
+    <!-- TOP TOOLBAR -->
     <androidx.appcompat.widget.Toolbar
         android:id="@+id/optionToolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="?attr/colorPrimary"
-        app:title="Analytics"
-        app:titleTextColor="@android:color/white" />
+        android:background="#111214"
+        app:title="My Routine"
+        app:titleTextColor="#FFFFFF" />
 
-    <TextView
+    <!-- SCROLLABLE CONTENT -->
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="80dp"
-        android:gravity="center"
-        android:text="Analytics Screen"
-        android:textSize="26sp"
-        android:textStyle="bold" />
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:clipToPadding="false"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- HEADING -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Plan Your Workouts"
+                android:textColor="#FFFFFF"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Choose a day and organize your training"
+                android:textColor="#8F95A1"
+                android:textSize="14sp"
+                android:layout_marginTop="5dp" />
+
+            <!-- CALENDAR CARD -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:padding="10dp"
+                android:orientation="vertical"
+                android:background="@drawable/equipment_card">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Calendar"
+                    android:textColor="#FFFFFF"
+                    android:textSize="17sp"
+                    android:textStyle="bold"
+                    android:padding="8dp" />
+
+                <CalendarView
+                    android:id="@+id/routineCalendar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@android:color/transparent"
+                    android:dateTextAppearance="@style/CalendarDateText"
+                    android:weekDayTextAppearance="@style/CalendarWeekText"
+                    android:focusedMonthDateColor="#FFFFFF"
+                    android:unfocusedMonthDateColor="#777E89"
+                    android:selectedWeekBackgroundColor="#343A46"
+                    android:weekSeparatorLineColor="#343A46"
+                    android:showWeekNumber="false" />
+
+            </LinearLayout>
+
+            <!-- SELECTED DATE SECTION -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Selected Day"
+                android:textColor="#FFFFFF"
+                android:textSize="19sp"
+                android:textStyle="bold"
+                android:layout_marginTop="24dp" />
+
+            <TextView
+                android:id="@+id/tvSelectedDate"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Selected date"
+                android:textSize="16sp"
+                android:textColor="#FFFFFF"
+                android:padding="16dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/equipment_card" />
+
+            <!-- ADD WORKOUT BUTTON -->
+            <Button
+                android:id="@+id/btnAddWorkout"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:text="Add Workout"
+                android:textColor="#FFFFFF"
+                android:textAllCaps="false"
+                android:backgroundTint="#343A46"
+                android:layout_marginTop="12dp" />
+
+            <!-- SCHEDULED WORKOUTS HEADING -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Scheduled Workouts"
+                    android:textColor="#FFFFFF"
+                    android:textSize="19sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/routineCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0 workouts scheduled"
+                    android:textColor="#8F95A1"
+                    android:textSize="12sp" />
+
+            </LinearLayout>
+
+            <!-- DYNAMIC WORKOUT CARDS -->
+            <LinearLayout
+                android:id="@+id/routineList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="14dp"
+                android:layout_marginBottom="24dp" />
+
+        </LinearLayout>
+
+    </androidx.core.widget.NestedScrollView>
 
 </LinearLayout>
