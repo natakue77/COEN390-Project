@@ -135,6 +135,10 @@ public class SensorProcess {
         );
         int reps = repCounter.getreps();
 
+        if (repCompleted) {
+            android.util.Log.d("BarbellBLE", "REP! total = " + reps);
+        }
+
 
 
 
