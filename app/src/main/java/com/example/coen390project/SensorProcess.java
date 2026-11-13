@@ -1,5 +1,7 @@
 package com.example.coen390project;
 
+import java.util.ArrayList;
+
 public class SensorProcess {
     private double vx,vy,vz, x,y,z;
     private double ax,ay,az;
@@ -18,10 +20,19 @@ public class SensorProcess {
     private double minX = Double.POSITIVE_INFINITY;
     private long lastPrint = 0;
 
+    private boolean learning = false;
+
+    private final ArrayList<BLEManager.SensorSample> learningSamples =
+            new ArrayList<>();
+
 
 
 
     public void processSample(BLEManager.SensorSample sample){
+
+        if (learning) {
+            learningSamples.add(sample);
+        }
 
         //android.util.Log.d("BarbellBLE", "SensorProcess reached: " + sample.sequence);
         ax =  (sample.ax*9.80665);
@@ -154,5 +165,19 @@ public class SensorProcess {
                 Math.abs(ay) < 0.15 &&
                 Math.abs(az) < 0.15;
     }
+
+    public void startLearning() {
+        learningSamples.clear();
+        learning = true;
+    }
+
+    public void stopLearning() {
+        learning = false;
+
+        android.util.Log.d("BarbellBLE",
+                "Learning complete. Samples recorded: " + learningSamples.size());
+    }
+
+
 
 }
