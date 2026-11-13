@@ -25,6 +25,12 @@ public class SensorProcess {
     private final ArrayList<BLEManager.SensorSample> learningSamples =
             new ArrayList<>();
 
+    private static final SensorProcess instance = new SensorProcess();
+
+    public static SensorProcess getInstance() {
+        return instance;
+    }
+
 
 
 
@@ -32,6 +38,10 @@ public class SensorProcess {
 
         if (learning) {
             learningSamples.add(sample);
+        } else if (repCounter.update(sample)) {
+            android.util.Log.d("BarbellBLE",
+                    "Rep counted: " + repCounter.getreps() +
+                            " | DTW score: " + repCounter.getLastMatchScore());
         }
 
         //android.util.Log.d("BarbellBLE", "SensorProcess reached: " + sample.sequence);
@@ -139,12 +149,7 @@ public class SensorProcess {
         y += vy * dt;
         z += vz * dt;
 
-        boolean repCompleted = repCounter.update(
-                (float) z,
-                (float) vz,
-                sample.timestampUs / 1000L
-        );
-        int reps = repCounter.getreps();
+
 
 
 
@@ -168,16 +173,23 @@ public class SensorProcess {
 
     public void startLearning() {
         learningSamples.clear();
+        repCounter.reset();
         learning = true;
     }
 
     public void stopLearning() {
         learning = false;
 
-        android.util.Log.d("BarbellBLE",
-                "Learning complete. Samples recorded: " + learningSamples.size());
-    }
+        boolean success = repCounter.learn(learningSamples);
 
+        android.util.Log.d("BarbellBLE",
+                success
+                        ? "Reference saved! Reps: " + repCounter.getreps()
+                        : "Learning failed. Try recording another rep.");
+    }
+    public boolean isLearning() {
+        return learning;
+    }
 
 
 }
