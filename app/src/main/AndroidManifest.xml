@@ -66,6 +66,12 @@ android:required="true" />
             android:name=".Option5Activity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".ExerciseListActivity"
+            android:exported="false" />
+        <activity
+            android:name=".HeartRateActivity"
+            android:exported="false" />
     </application>
 
 </manifest>

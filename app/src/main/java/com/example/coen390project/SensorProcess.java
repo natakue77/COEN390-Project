@@ -1,5 +1,7 @@
 package com.example.coen390project;
 
+import java.util.ArrayList;
+
 public class SensorProcess {
     private double vx,vy,vz, x,y,z;
     private double ax,ay,az;
@@ -18,10 +20,29 @@ public class SensorProcess {
     private double minX = Double.POSITIVE_INFINITY;
     private long lastPrint = 0;
 
+    private boolean learning = false;
+
+    private final ArrayList<BLEManager.SensorSample> learningSamples =
+            new ArrayList<>();
+
+    private static final SensorProcess instance = new SensorProcess();
+
+    public static SensorProcess getInstance() {
+        return instance;
+    }
+
 
 
 
     public void processSample(BLEManager.SensorSample sample){
+
+        if (learning) {
+            learningSamples.add(sample);
+        } else if (repCounter.update(sample)) {
+            android.util.Log.d("BarbellBLE",
+                    "Rep counted: " + repCounter.getreps() +
+                            " | DTW score: " + repCounter.getLastMatchScore());
+        }
 
         //android.util.Log.d("BarbellBLE", "SensorProcess reached: " + sample.sequence);
         ax =  (sample.ax*9.80665);
@@ -128,12 +149,7 @@ public class SensorProcess {
         y += vy * dt;
         z += vz * dt;
 
-        boolean repCompleted = repCounter.update(
-                (float) z,
-                (float) vz,
-                sample.timestampUs / 1000L
-        );
-        int reps = repCounter.getreps();
+
 
 
 
@@ -154,5 +170,26 @@ public class SensorProcess {
                 Math.abs(ay) < 0.15 &&
                 Math.abs(az) < 0.15;
     }
+
+    public void startLearning() {
+        learningSamples.clear();
+        repCounter.reset();
+        learning = true;
+    }
+
+    public void stopLearning() {
+        learning = false;
+
+        boolean success = repCounter.learn(learningSamples);
+
+        android.util.Log.d("BarbellBLE",
+                success
+                        ? "Reference saved! Reps: " + repCounter.getreps()
+                        : "Learning failed. Try recording another rep.");
+    }
+    public boolean isLearning() {
+        return learning;
+    }
+
 
 }

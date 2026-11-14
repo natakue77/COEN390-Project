@@ -7,6 +7,7 @@ import android.widget.EditText;
 import android.widget.RadioButton;
 import android.widget.Button;
 import android.widget.Toast;
+import android.widget.Button;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
@@ -29,6 +30,22 @@ public class Option5Activity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_option5);
+        Button learnButton = findViewById(R.id.LearnButton);
+        SensorProcess processor = SensorProcess.getInstance();
+
+        learnButton.setText(processor.isLearning() ? "Stop Learning" : "Start Learning");
+
+        learnButton.setOnClickListener(v -> {
+            if (processor.isLearning()) {
+                processor.stopLearning();
+            } else {
+                processor.startLearning();
+            }
+
+            learnButton.setText(
+                    processor.isLearning() ? "Stop Learning" : "Start Learning"
+            );
+        });
 
         // Keep the original Toolbar
         Toolbar toolbar = findViewById(R.id.optionToolbar);
