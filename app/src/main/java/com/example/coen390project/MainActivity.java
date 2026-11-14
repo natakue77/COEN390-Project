@@ -4,13 +4,16 @@ package com.example.coen390project;
 import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -25,7 +28,11 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
 import androidx.core.view.GravityCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.google.android.material.navigation.NavigationView;
@@ -43,18 +50,29 @@ public class MainActivity extends AppCompatActivity
         implements BLEManager.Listener {
 
     private DrawerLayout drawerLayout;
+    private LinearLayout dashboardContainer;
 
-    // Preserve the existing ESP32 BLE connection and IMU processing.
+    // =================================================
+    // BLE AND SENSOR HARDWARE
+    // =================================================
+
     private BLEManager bleManager;
-    private SensorProcess sensorProcess = SensorProcess.getInstance();
+
+    private SensorProcess sensorProcess =
+            SensorProcess.getInstance();
 
     private final ActivityResultLauncher<String[]> permissionLauncher =
             registerForActivityResult(
                     new ActivityResultContracts.RequestMultiplePermissions(),
                     result -> {
-                        if (bleManager != null && bleManager.hasPermissions()) {
+
+                        if (bleManager != null
+                                && bleManager.hasPermissions()) {
+
                             bleManager.scanAndConnect();
+
                         } else {
+
                             Toast.makeText(
                                     this,
                                     "Bluetooth permissions denied",
@@ -63,7 +81,10 @@ public class MainActivity extends AppCompatActivity
                         }
                     }
             );
-    private LinearLayout dashboardContainer;
+
+    // =================================================
+    // DASHBOARD VARIABLES
+    // =================================================
 
     private TextView workoutName;
     private TextView workoutDetails;
@@ -71,12 +92,13 @@ public class MainActivity extends AppCompatActivity
 
     private TextView weeklyNumber;
     private TextView weeklyDescription;
-
     private TextView upcomingDescription;
 
-    private final ArrayList<String> todayExercises = new ArrayList<>();
+    private final ArrayList<String> todayExercises =
+            new ArrayList<>();
 
     private int currentExercise = 0;
+    private int progressPage = 0;
 
     private SharedPreferences weightPreferences;
 
@@ -84,11 +106,8 @@ public class MainActivity extends AppCompatActivity
     private final int MUTED = Color.rgb(143, 149, 161);
     private final int CARD_COLOR = Color.rgb(41, 45, 53);
 
-
     // =================================================
     // IMAGE SIZE SETTINGS
-    // Change width and height independently.
-    // All measurements are in dp.
     // =================================================
 
     private static final int DUMBBELL_WIDTH = 40;
@@ -106,15 +125,8 @@ public class MainActivity extends AppCompatActivity
     private static final int HEART_WIDTH = 32;
     private static final int HEART_HEIGHT = 32;
 
-
     // =================================================
     // ICON PLACEMENT SETTINGS
-    //
-    // Gravity.START  = Left
-    // Gravity.CENTER = Center
-    // Gravity.END    = Right
-    //
-    // Change each widget independently.
     // =================================================
 
     private static final int DUMBBELL_PLACEMENT =
@@ -129,11 +141,8 @@ public class MainActivity extends AppCompatActivity
     private static final int UPCOMING_PLACEMENT =
             Gravity.START | Gravity.CENTER_VERTICAL;
 
-
     // =================================================
     // ICON MARGINS
-    //
-    // Order: LEFT, TOP, RIGHT, BOTTOM
     // =================================================
 
     private static final int DUMBBELL_LEFT = -10;
@@ -146,7 +155,7 @@ public class MainActivity extends AppCompatActivity
     private static final int WEEKLY_RIGHT = 0;
     private static final int WEEKLY_BOTTOM = 0;
 
-    private static final int PROGRESS_LEFT = -70;
+    private static final int PROGRESS_LEFT = 0;
     private static final int PROGRESS_TOP = 0;
     private static final int PROGRESS_RIGHT = 0;
     private static final int PROGRESS_BOTTOM = 0;
@@ -156,12 +165,47 @@ public class MainActivity extends AppCompatActivity
     private static final int UPCOMING_RIGHT = 9;
     private static final int UPCOMING_BOTTOM = 0;
 
+    // =================================================
+    // ON CREATE
+    // =================================================
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        WindowCompat.setDecorFitsSystemWindows(
+                getWindow(), false
+        );
+
         setContentView(R.layout.activity_main);
 
+        View mainContent = findViewById(R.id.mainContent);
+
+        int originalTopPadding = mainContent.getPaddingTop();
+
+        ViewCompat.setOnApplyWindowInsetsListener(
+                mainContent,
+                (view, windowInsets) -> {
+
+                    Insets insets = windowInsets.getInsets(
+                            WindowInsetsCompat.Type.statusBars()
+                                    | WindowInsetsCompat.Type.displayCutout()
+                    );
+
+                    view.setPadding(
+                            view.getPaddingLeft(),
+                            originalTopPadding + insets.top,
+                            view.getPaddingRight(),
+                            view.getPaddingBottom()
+                    );
+
+                    return windowInsets;
+                }
+        );
+
+        ViewCompat.requestApplyInsets(mainContent);
+
+        // Initialize BLE manager before attempting connection.
         bleManager = new BLEManager(this, this);
 
         weightPreferences = getSharedPreferences(
@@ -169,20 +213,21 @@ public class MainActivity extends AppCompatActivity
                 MODE_PRIVATE
         );
 
-        dashboardContainer = findViewById(R.id.dashboardContainer);
+        dashboardContainer = findViewById(
+                R.id.dashboardContainer
+        );
 
         setupToolbar();
 
         buildDashboard();
 
-        // Connect after the dashboard and BLE manager have been initialized.
+        // Start ESP32 connection after initialization.
         connectToTracker();
     }
 
-
-    // ------------------------------------------------
+    // =================================================
     // TOOLBAR AND NAVIGATION
-    // ------------------------------------------------
+    // =================================================
 
     private void setupToolbar() {
 
@@ -190,6 +235,28 @@ public class MainActivity extends AppCompatActivity
                 findViewById(R.id.mainToolbar);
 
         setSupportActionBar(toolbar);
+
+        TextView toolbarTitle = null;
+
+        for (int i = 0; i < toolbar.getChildCount(); i++) {
+
+            View child = toolbar.getChildAt(i);
+
+            if (child instanceof TextView) {
+                toolbarTitle = (TextView) child;
+                break;
+            }
+        }
+
+        if (toolbarTitle != null) {
+            toolbarTitle.setTranslationY(
+                    -7 * getResources().getDisplayMetrics().density
+            );
+        }
+
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setTitle("Home");
+        }
 
         drawerLayout = findViewById(R.id.drawerLayout);
 
@@ -244,11 +311,17 @@ public class MainActivity extends AppCompatActivity
         getOnBackPressedDispatcher().addCallback(
                 this,
                 new androidx.activity.OnBackPressedCallback(true) {
+
                     @Override
                     public void handleOnBackPressed() {
 
-                        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                            drawerLayout.closeDrawer(GravityCompat.START);
+                        if (drawerLayout.isDrawerOpen(
+                                GravityCompat.START)) {
+
+                            drawerLayout.closeDrawer(
+                                    GravityCompat.START
+                            );
+
                         } else {
                             finish();
                         }
@@ -261,10 +334,9 @@ public class MainActivity extends AppCompatActivity
         startActivity(new Intent(MainActivity.this, activity));
     }
 
-
-    // ------------------------------------------------
-    // DASHBOARD
-    // ------------------------------------------------
+    // =================================================
+    // DASHBOARD LAYOUT
+    // =================================================
 
     private void buildDashboard() {
 
@@ -276,9 +348,9 @@ public class MainActivity extends AppCompatActivity
 
         addWorkoutWidget();
 
-        addSmallWidgetsRow();
+        addWeeklyAndUpcomingRow();
 
-        addUpcomingRoutineWidget();
+        addProgressWidget();
 
         addHeartRateWidget();
     }
@@ -309,10 +381,9 @@ public class MainActivity extends AppCompatActivity
         dashboardContainer.addView(header);
     }
 
-
-    // ------------------------------------------------
+    // =================================================
     // TODAY'S WORKOUT
-    // ------------------------------------------------
+    // =================================================
 
     private void loadTodayExercises() {
 
@@ -358,7 +429,6 @@ public class MainActivity extends AppCompatActivity
         LinearLayout topRow = new LinearLayout(this);
         topRow.setOrientation(LinearLayout.HORIZONTAL);
         topRow.setGravity(DUMBBELL_PLACEMENT);
-        topRow.setPadding(0, dp(0), 0, dp(0));
 
         topRow.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -532,10 +602,9 @@ public class MainActivity extends AppCompatActivity
         workoutWeight.setText(savedWeight);
     }
 
-
-    // ------------------------------------------------
+    // =================================================
     // WORKOUT MENU
-    // ------------------------------------------------
+    // =================================================
 
     private void showWorkoutMenu(View anchor) {
 
@@ -565,7 +634,8 @@ public class MainActivity extends AppCompatActivity
 
             } else if (selected.equals("Reset Weight")) {
 
-                String exercise = todayExercises.get(currentExercise);
+                String exercise =
+                        todayExercises.get(currentExercise);
 
                 weightPreferences.edit()
                         .remove(weightKey(exercise))
@@ -604,7 +674,10 @@ public class MainActivity extends AppCompatActivity
                 ""
         );
 
-        input.setText(currentWeight.equals("--") ? "" : currentWeight);
+        input.setText(
+                currentWeight.equals("--") ? "" : currentWeight
+        );
+
         input.setSelectAllOnFocus(true);
         input.setPadding(dp(16), dp(12), dp(16), dp(12));
 
@@ -651,55 +724,62 @@ public class MainActivity extends AppCompatActivity
                 .replaceAll("[^a-z0-9]", "_");
     }
 
+    // =================================================
+    // WEEKLY ACTIVITY + UPCOMING ROUTINE ROW
+    // =================================================
 
-    // ------------------------------------------------
-    // WEEKLY ACTIVITY AND PROGRESS
-    // ------------------------------------------------
-
-    private void addSmallWidgetsRow() {
+    private void addWeeklyAndUpcomingRow() {
 
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.TOP);
 
         LinearLayout weeklyCard = createCard();
-        LinearLayout progressCard = createCard();
+        LinearLayout upcomingCard = createCard();
 
-        LinearLayout.LayoutParams params =
+        int cardHeight = dp(155);
+
+        weeklyCard.setMinimumHeight(cardHeight);
+        upcomingCard.setMinimumHeight(cardHeight);
+
+        LinearLayout.LayoutParams weeklyParams =
                 new LinearLayout.LayoutParams(
                         0,
                         LinearLayout.LayoutParams.WRAP_CONTENT,
                         1
                 );
 
-        params.setMargins(0, 0, dp(7), dp(14));
-        weeklyCard.setLayoutParams(params);
+        weeklyParams.setMargins(0, 0, dp(7), dp(14));
 
-        LinearLayout.LayoutParams progressParams =
+        LinearLayout.LayoutParams upcomingParams =
                 new LinearLayout.LayoutParams(
                         0,
                         LinearLayout.LayoutParams.WRAP_CONTENT,
                         1
                 );
 
-        progressParams.setMargins(dp(7), 0, 0, dp(14));
-        progressCard.setLayoutParams(progressParams);
+        upcomingParams.setMargins(dp(7), 0, 0, dp(14));
+
+        weeklyCard.setLayoutParams(weeklyParams);
+        upcomingCard.setLayoutParams(upcomingParams);
 
         addWeeklyActivityContent(weeklyCard);
-        addProgressContent(progressCard);
+        addUpcomingRoutineContent(upcomingCard);
 
         row.addView(weeklyCard);
-        row.addView(progressCard);
+        row.addView(upcomingCard);
 
         dashboardContainer.addView(row);
     }
+
+    // =================================================
+    // WEEKLY ACTIVITY
+    // =================================================
 
     private void addWeeklyActivityContent(LinearLayout card) {
 
         LinearLayout titleRow = new LinearLayout(this);
         titleRow.setOrientation(LinearLayout.HORIZONTAL);
-
-        // Change WEEKLY_PLACEMENT at the top to reposition this group.
         titleRow.setGravity(WEEKLY_PLACEMENT);
 
         titleRow.setLayoutParams(new LinearLayout.LayoutParams(
@@ -789,71 +869,14 @@ public class MainActivity extends AppCompatActivity
         );
     }
 
-    private void addProgressContent(LinearLayout card) {
-
-        LinearLayout titleRow = new LinearLayout(this);
-        titleRow.setOrientation(LinearLayout.HORIZONTAL);
-
-        // Change PROGRESS_PLACEMENT at the top to reposition this group.
-        titleRow.setGravity(PROGRESS_PLACEMENT);
-
-        titleRow.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        ));
-
-        titleRow.setPadding(0, 0, 0, dp(48));
-
-        addTitleIcon(
-                titleRow,
-                R.drawable.img_progress,
-                "Progress icon",
-                PROGRESS_WIDTH,
-                PROGRESS_HEIGHT,
-                PROGRESS_LEFT,
-                PROGRESS_TOP,
-                PROGRESS_RIGHT,
-                PROGRESS_BOTTOM
-        );
-
-        TextView title = createText(
-                "Progress",
-                15,
-                WHITE,
-                true
-        );
-
-        titleRow.addView(title);
-
-        card.addView(titleRow);
-
-        TextView description = createText(
-                "Your workout progress will appear here.",
-                12,
-                MUTED,
-                false
-        );
-
-        card.addView(description);
-
-        card.setOnClickListener(v ->
-                openActivity(Option2Activity.class)
-        );
-    }
-
-
-    // ------------------------------------------------
+    // =================================================
     // UPCOMING ROUTINE
-    // ------------------------------------------------
+    // =================================================
 
-    private void addUpcomingRoutineWidget() {
-
-        LinearLayout card = createCard();
+    private void addUpcomingRoutineContent(LinearLayout card) {
 
         LinearLayout titleRow = new LinearLayout(this);
         titleRow.setOrientation(LinearLayout.HORIZONTAL);
-
-        // Change UPCOMING_PLACEMENT at the top to reposition this group.
         titleRow.setGravity(UPCOMING_PLACEMENT);
 
         titleRow.setLayoutParams(new LinearLayout.LayoutParams(
@@ -877,18 +900,17 @@ public class MainActivity extends AppCompatActivity
 
         TextView title = createText(
                 "Upcoming Routine",
-                16,
+                15,
                 WHITE,
                 true
         );
 
         titleRow.addView(title);
-
         card.addView(titleRow);
 
         upcomingDescription = createText(
                 "",
-                13,
+                12,
                 MUTED,
                 false
         );
@@ -900,14 +922,11 @@ public class MainActivity extends AppCompatActivity
         card.setOnClickListener(v ->
                 openActivity(Option3Activity.class)
         );
-
-        dashboardContainer.addView(card);
     }
 
     private void updateUpcomingRoutine() {
 
         Calendar searchDate = Calendar.getInstance();
-
         Calendar now = Calendar.getInstance();
 
         JSONObject nextSession = null;
@@ -986,20 +1005,22 @@ public class MainActivity extends AppCompatActivity
                 exercises == null ? 0 : exercises.length();
 
         String readableDate = formatReadableDate(nextDate);
-
         String time = nextSession.optString("time", "");
 
         upcomingDescription.setText(
                 readableDate
-                        + "  •  " + time
+                        + "\n" + time
                         + "\n" + exerciseCount
                         + (exerciseCount == 1
-                        ? " exercise scheduled"
-                        : " exercises scheduled")
+                        ? " exercise"
+                        : " exercises")
         );
     }
 
-    private Calendar createSessionDateTime(String date, String time) {
+    private Calendar createSessionDateTime(
+            String date,
+            String time
+    ) {
 
         try {
 
@@ -1023,7 +1044,11 @@ public class MainActivity extends AppCompatActivity
 
             if (parsedTime == null) {
 
-                timeFormat = new SimpleDateFormat("h:mm a", Locale.US);
+                timeFormat = new SimpleDateFormat(
+                        "h:mm a",
+                        Locale.US
+                );
+
                 parsedTime = timeFormat.parse(time);
             }
 
@@ -1054,10 +1079,302 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
+    // =================================================
+    // FULL-WIDTH PROGRESS WIDGET
+    // =================================================
 
-    // ------------------------------------------------
+    private void addProgressWidget() {
+
+        LinearLayout card = createCard();
+
+        addProgressContent(card);
+
+        dashboardContainer.addView(card);
+    }
+
+    private void addProgressContent(LinearLayout card) {
+
+        progressPage = 0;
+
+        LinearLayout titleRow = new LinearLayout(this);
+        titleRow.setOrientation(LinearLayout.HORIZONTAL);
+        titleRow.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+
+        titleRow.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+
+        titleRow.setPadding(0, 0, 0, dp(8));
+
+        addTitleIcon(
+                titleRow,
+                R.drawable.img_progress,
+                "Progress icon",
+                PROGRESS_WIDTH,
+                PROGRESS_HEIGHT,
+                PROGRESS_LEFT,
+                PROGRESS_TOP,
+                PROGRESS_RIGHT,
+                PROGRESS_BOTTOM
+        );
+
+        TextView title = createText(
+                "Progress",
+                17,
+                WHITE,
+                true
+        );
+
+        titleRow.addView(title);
+        card.addView(titleRow);
+
+        TextView graphHeading = createText(
+                "Completed Workouts",
+                14,
+                WHITE,
+                true
+        );
+
+        graphHeading.setPadding(0, dp(12), 0, dp(8));
+
+        card.addView(graphHeading);
+
+        ProgressGraphView graph = new ProgressGraphView(this);
+
+        LinearLayout.LayoutParams graphParams =
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        dp(170)
+                );
+
+        graph.setLayoutParams(graphParams);
+
+        card.addView(graph);
+
+        TextView swipeHint = createText(
+                "↑ Swipe for goals",
+                11,
+                MUTED,
+                true
+        );
+
+        swipeHint.setGravity(Gravity.CENTER);
+        swipeHint.setPadding(0, dp(10), 0, 0);
+
+        card.addView(swipeHint);
+
+        card.setOnClickListener(v ->
+                openActivity(Option2Activity.class)
+        );
+
+        graph.setOnTouchListener(new View.OnTouchListener() {
+
+            private float startX;
+            private float startY;
+
+            @Override
+            public boolean onTouch(View view, MotionEvent event) {
+
+                switch (event.getAction()) {
+
+                    case MotionEvent.ACTION_DOWN:
+
+                        startX = event.getX();
+                        startY = event.getY();
+
+                        view.getParent()
+                                .requestDisallowInterceptTouchEvent(true);
+
+                        return true;
+
+                    case MotionEvent.ACTION_MOVE:
+
+                        view.getParent()
+                                .requestDisallowInterceptTouchEvent(true);
+
+                        return true;
+
+                    case MotionEvent.ACTION_UP:
+
+                        float differenceY = event.getY() - startY;
+                        float differenceX = event.getX() - startX;
+
+                        view.getParent()
+                                .requestDisallowInterceptTouchEvent(false);
+
+                        if (Math.abs(differenceY) > dp(25)
+                                && Math.abs(differenceY) > Math.abs(differenceX)) {
+
+                            if (differenceY < 0) {
+                                progressPage = 1;
+                            } else {
+                                progressPage = 0;
+                            }
+
+                            if (progressPage == 0) {
+
+                                graphHeading.setText(
+                                        "Completed Workouts"
+                                );
+
+                                swipeHint.setText(
+                                        "↑ Swipe for goals"
+                                );
+
+                            } else {
+
+                                graphHeading.setText(
+                                        "Goal Progress"
+                                );
+
+                                swipeHint.setText(
+                                        "↓ Swipe for workouts"
+                                );
+                            }
+
+                            graph.setMode(progressPage);
+
+                        } else if (Math.abs(differenceY) < dp(10)
+                                && Math.abs(differenceX) < dp(10)) {
+
+                            card.performClick();
+                        }
+
+                        return true;
+
+                    case MotionEvent.ACTION_CANCEL:
+
+                        view.getParent()
+                                .requestDisallowInterceptTouchEvent(false);
+
+                        return true;
+                }
+
+                return true;
+            }
+        });
+    }
+
+    // =================================================
+    // PROGRESS GRAPH
+    // =================================================
+
+    private class ProgressGraphView extends View {
+
+        private int mode = 0;
+
+        private final Paint paint = new Paint(
+                Paint.ANTI_ALIAS_FLAG
+        );
+
+        public ProgressGraphView(
+                android.content.Context context
+        ) {
+            super(context);
+            setClickable(true);
+        }
+
+        public void setMode(int newMode) {
+            mode = newMode;
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+
+            super.onDraw(canvas);
+
+            float width = getWidth();
+            float height = getHeight();
+
+            float left = dp(28);
+            float right = width - dp(12);
+            float top = dp(12);
+            float bottom = height - dp(25);
+
+            // Horizontal guide lines.
+            paint.setColor(Color.rgb(65, 70, 80));
+            paint.setStrokeWidth(dp(1));
+            paint.setStyle(Paint.Style.STROKE);
+
+            for (int i = 0; i < 4; i++) {
+
+                float y = top + (bottom - top) * i / 3f;
+
+                canvas.drawLine(
+                        left,
+                        y,
+                        right,
+                        y,
+                        paint
+                );
+            }
+
+            // Graph axes.
+            paint.setColor(MUTED);
+            paint.setStrokeWidth(dp(1));
+
+            canvas.drawLine(left, top, left, bottom, paint);
+            canvas.drawLine(left, bottom, right, bottom, paint);
+
+            // Labels.
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(MUTED);
+            paint.setTextSize(dp(10));
+            paint.setTextAlign(Paint.Align.CENTER);
+
+            if (mode == 0) {
+
+                String[] days = {
+                        "MON", "TUE", "WED", "THU",
+                        "FRI", "SAT", "SUN"
+                };
+
+                for (int i = 0; i < days.length; i++) {
+
+                    float x = left +
+                            (right - left) * i / 6f;
+
+                    canvas.drawText(
+                            days[i],
+                            x,
+                            height - dp(5),
+                            paint
+                    );
+                }
+
+            } else {
+
+                canvas.drawText(
+                        "GOALS",
+                        (left + right) / 2f,
+                        height - dp(5),
+                        paint
+                );
+            }
+
+            // Graph placeholder.
+            paint.setColor(MUTED);
+            paint.setTextSize(dp(11));
+            paint.setTextAlign(Paint.Align.CENTER);
+
+            String message = mode == 0
+                    ? "No workout data yet"
+                    : "Goal data coming soon";
+
+            canvas.drawText(
+                    message,
+                    (left + right) / 2f,
+                    (top + bottom) / 2f + dp(4),
+                    paint
+            );
+        }
+    }
+
+    // =================================================
     // HEART RATE
-    // ------------------------------------------------
+    // =================================================
 
     private void addHeartRateWidget() {
 
@@ -1100,7 +1417,6 @@ public class MainActivity extends AppCompatActivity
         heartRateRow.setPadding(0, dp(8), 0, dp(8));
 
         ImageView heartImage = new ImageView(this);
-
         heartImage.setImageResource(R.drawable.img_heart_rate);
 
         LinearLayout.LayoutParams heartParams =
@@ -1125,7 +1441,6 @@ public class MainActivity extends AppCompatActivity
         );
 
         heart.setGravity(Gravity.CENTER_VERTICAL);
-
         heartRateRow.addView(heart);
 
         card.addView(heartRateRow);
@@ -1149,10 +1464,9 @@ public class MainActivity extends AppCompatActivity
         dashboardContainer.addView(card);
     }
 
-
-    // ------------------------------------------------
-    // CUSTOM ICON HELPER
-    // ------------------------------------------------
+    // =================================================
+    // ICON HELPER
+    // =================================================
 
     private void addTitleIcon(
             LinearLayout parent,
@@ -1189,10 +1503,9 @@ public class MainActivity extends AppCompatActivity
         parent.addView(image);
     }
 
-
-    // ------------------------------------------------
+    // =================================================
     // DESIGN HELPERS
-    // ------------------------------------------------
+    // =================================================
 
     private LinearLayout createCard() {
 
@@ -1296,10 +1609,18 @@ public class MainActivity extends AppCompatActivity
         );
     }
 
+    private int dp(float value) {
 
-    // ------------------------------------------------
+        return (int) (
+                value *
+                        getResources().getDisplayMetrics().density
+                        + 0.5f
+        );
+    }
+
+    // =================================================
     // DATE HELPERS
-    // ------------------------------------------------
+    // =================================================
 
     private String formatDate(long milliseconds) {
 
@@ -1335,10 +1656,9 @@ public class MainActivity extends AppCompatActivity
         return date;
     }
 
-
-    // ------------------------------------------------
-    // REFRESH WHEN RETURNING TO DASHBOARD
-    // ------------------------------------------------
+    // =================================================
+    // REFRESH DASHBOARD
+    // =================================================
 
     @Override
     protected void onResume() {
@@ -1349,38 +1669,55 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-
-    // ------------------------------------------------
-    // BLE SENSOR STREAM (PRESERVED FROM YOUR CURRENT APP)
-    // ------------------------------------------------
+    // =================================================
+    // BLE SENSOR STREAM
+    // =================================================
 
     @Override
     public void onSample(BLEManager.SensorSample sample) {
+
         sensorProcess.processSample(sample);
     }
 
     @Override
     public void onStatus(String message) {
-        android.util.Log.d("BarbellBLE", message);
+
+        android.util.Log.d(
+                "BarbellBLE",
+                message
+        );
     }
 
     @Override
     public void onError(String message) {
-        android.util.Log.e("BarbellBLE", message);
+
+        android.util.Log.e(
+                "BarbellBLE",
+                message
+        );
     }
 
+    // =================================================
+    // CONNECT TO ESP32 TRACKER
+    // =================================================
+
     private void connectToTracker() {
+
         if (bleManager.hasPermissions()) {
+
             bleManager.scanAndConnect();
             return;
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+
             permissionLauncher.launch(new String[] {
                     Manifest.permission.BLUETOOTH_SCAN,
                     Manifest.permission.BLUETOOTH_CONNECT
             });
+
         } else {
+
             permissionLauncher.launch(new String[] {
                     Manifest.permission.ACCESS_FINE_LOCATION
             });

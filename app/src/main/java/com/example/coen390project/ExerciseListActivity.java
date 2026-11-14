@@ -105,6 +105,8 @@ public class ExerciseListActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
+    // DISPLAY EXERCISES FOR EACH BODY PART
+
     private void displayExercises() {
 
         exerciseContainer.removeAllViews();
@@ -124,13 +126,65 @@ public class ExerciseListActivity extends AppCompatActivity {
                 };
                 break;
 
+            case "shoulders":
+                exercises = new String[]{
+                        "Shoulder Press",
+                        "Dumbbell Lateral Raises",
+                        "Front Raises",
+                        "Reverse Flyes",
+                        "Arnold Press",
+                        "Upright Rows",
+                        "Face Pulls"
+                };
+                break;
+
+            case "forearms":
+            case "forearm":
+                exercises = new String[]{
+                        "Wrist Curls",
+                        "Reverse Wrist Curls",
+                        "Hammer Curls",
+                        "Reverse Curls",
+                        "Farmer's Carries",
+                        "Dead Hangs",
+                        "Wrist Roller"
+                };
+                break;
+
+            case "biceps":
+                exercises = new String[]{
+                        "Standard Bicep Curls",
+                        "Hammer Curls",
+                        "Concentration Curls",
+                        "Preacher Curls",
+                        "Incline Dumbbell Curls",
+                        "Cable Curls",
+                        "EZ Bar Curls"
+                };
+                break;
+
+            case "triceps":
+                exercises = new String[]{
+                        "Tricep Pushdowns",
+                        "Overhead Tricep Extensions",
+                        "Tricep Dips",
+                        "Skull Crushers",
+                        "Close-Grip Bench Press",
+                        "Diamond Push-Ups",
+                        "Dumbbell Kickbacks"
+                };
+                break;
+
             case "legs":
                 exercises = new String[]{
                         "Squats",
                         "Lunges",
                         "Leg Press",
                         "Calf Raises",
-                        "Glute Bridges"
+                        "Glute Bridges",
+                        "Romanian Deadlifts",
+                        "Leg Extensions",
+                        "Leg Curls"
                 };
                 break;
 
@@ -140,7 +194,9 @@ public class ExerciseListActivity extends AppCompatActivity {
                         "Bench Press",
                         "Incline Dumbbell Press",
                         "Chest Flyes",
-                        "Cable Crossovers"
+                        "Cable Crossovers",
+                        "Decline Bench Press",
+                        "Dumbbell Pullovers"
                 };
                 break;
 
@@ -150,17 +206,25 @@ public class ExerciseListActivity extends AppCompatActivity {
                         "Lat Pulldowns",
                         "Bent-Over Rows",
                         "Seated Cable Rows",
-                        "Deadlifts"
+                        "Deadlifts",
+                        "Single-Arm Dumbbell Rows",
+                        "Straight-Arm Pulldowns",
+                        "T-Bar Rows"
                 };
                 break;
 
+            case "abdomen":
+            case "abs":
             default:
                 exercises = new String[]{
                         "Crunches",
                         "Plank",
                         "Leg Raises",
                         "Russian Twists",
-                        "Mountain Climbers"
+                        "Mountain Climbers",
+                        "Bicycle Crunches",
+                        "Reverse Crunches",
+                        "Flutter Kicks"
                 };
                 break;
         }
@@ -281,7 +345,6 @@ public class ExerciseListActivity extends AppCompatActivity {
             card.addView(checkBox);
             exerciseCheckBoxes.add(checkBox);
 
-            // Allow tapping the card to select the exercise
             card.setOnClickListener(v ->
                     checkBox.setChecked(!checkBox.isChecked())
             );
@@ -290,9 +353,7 @@ public class ExerciseListActivity extends AppCompatActivity {
 
             Button removeButton = new Button(this);
             removeButton.setText("×");
-            removeButton.setTextColor(
-                    Color.rgb(180, 185, 195)
-            );
+            removeButton.setTextColor(Color.rgb(180, 185, 195));
             removeButton.setTextSize(22);
             removeButton.setAllCaps(false);
 

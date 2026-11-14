@@ -10,6 +10,7 @@
     android:background="#111214">
 
     <LinearLayout
+        android:id="@+id/mainContent"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
@@ -19,7 +20,11 @@
             android:id="@+id/mainToolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
+            android:minHeight="56dp"
             android:background="#111214"
+            android:paddingStart="4dp"
+            android:paddingEnd="8dp"
+            app:contentInsetStartWithNavigation="4dp"
             app:title="Home"
             app:titleTextColor="#FFFFFF" />
 
@@ -49,6 +54,10 @@
         android:layout_width="280dp"
         android:layout_height="match_parent"
         android:layout_gravity="start"
-        app:menu="@menu/drawer_menu" />
+        android:background="#292D35"
+        app:menu="@menu/drawer_menu"
+        app:itemTextColor="@color/drawer_item_colors"
+        app:itemIconTint="@color/drawer_item_colors"
+        app:itemBackground="@drawable/drawer_item_background" />
 
 </androidx.drawerlayout.widget.DrawerLayout>

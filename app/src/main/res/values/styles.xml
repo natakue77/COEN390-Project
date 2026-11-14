@@ -10,5 +10,15 @@
         <item name="android:textColor">#8F95A1</item>
         <item name="android:textSize">12sp</item>
     </style>
+    <style name="RoutineTimePickerTheme"
+        parent="@android:style/Theme.Material.Dialog.Alert">
 
+        <item name="android:colorAccent">#8F95A1</item>
+        <item name="android:colorControlActivated">#8F95A1</item>
+        <item name="android:colorBackground">#292D35</item>
+        <item name="android:windowBackground">#292D35</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">#FFFFFF</item>
+
+    </style>
 </resources>

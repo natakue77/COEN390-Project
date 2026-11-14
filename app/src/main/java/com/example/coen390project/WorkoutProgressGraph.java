@@ -1,4 +1,3 @@
-
 package com.example.coen390project;
 
 import android.content.Context;
