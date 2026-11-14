@@ -47,6 +47,15 @@ android:required="true" />
             </intent-filter>
         </activity>
         <activity
+            android:name=".MyOwnWorkouts"
+            android:exported="false" />
+        <activity
+            android:name=".HeartRateActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ExerciseListActivity"
+            android:exported="false" />
+        <activity
             android:name=".Option1Activity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />
@@ -66,12 +75,7 @@ android:required="true" />
             android:name=".Option5Activity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />
-        <activity
-            android:name=".ExerciseListActivity"
-            android:exported="false" />
-        <activity
-            android:name=".HeartRateActivity"
-            android:exported="false" />
+
     </application>
 
 </manifest>
