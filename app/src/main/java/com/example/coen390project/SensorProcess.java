@@ -214,8 +214,10 @@ public class SensorProcess {
     }
 
 
+
     public void startWorkout() {
         if (!learning && repCounter.isReady()) {
+            repCounter.resetRepCount();
             workoutActive = true;
         }
     }
@@ -223,6 +225,12 @@ public class SensorProcess {
     public void stopWorkout() {
         workoutActive = false;
     }
+
+    public void cancelLearning() {
+        learning = false;
+        learningSamples.clear();
+    }
+
 
     public int getRepCount() {
         return repCounter.getreps();

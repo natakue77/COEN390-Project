@@ -22,6 +22,17 @@ public class WorkoutSessionActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_workout_session);
 
+        Button backButton = findViewById(R.id.backButton);
+
+
+        backButton.setOnClickListener(v -> {
+            SensorProcess.getInstance().stopWorkout();
+            SensorProcess.getInstance().cancelLearning();
+            finish();
+        });
+
+
+
         TextView exerciseNameText = findViewById(R.id.exerciseNameText);
 
         String exerciseName = getIntent().getStringExtra("EXERCISE_NAME");
@@ -88,8 +99,11 @@ public class WorkoutSessionActivity extends AppCompatActivity {
             }
         });
 
+        TextView repCountText = findViewById(R.id.repCountText);
         startButton.setOnClickListener(v -> {
             sensorProcess.startWorkout();
+            repCountText.setText("0 Reps");
+
 
             statusText.setText("Workout in progress...");
 
@@ -99,12 +113,19 @@ public class WorkoutSessionActivity extends AppCompatActivity {
             finishButton.setVisibility(View.VISIBLE);
         });
 
-        TextView repCountText = findViewById(R.id.repCountText);
 
         finishButton.setOnClickListener(v -> {
             sensorProcess.stopWorkout();
 
             int totalReps = sensorProcess.getRepCount();
+
+            if (totalReps == 0) {
+                statusText.setText("No repetitions recorded. Workout not saved.");
+                finishButton.setVisibility(View.GONE);
+                startButton.setVisibility(View.VISIBLE);
+                return;
+            }
+
 
             boolean saved = WorkoutHistoryStorage.saveWorkout(
                     this,
@@ -153,6 +174,9 @@ public class WorkoutSessionActivity extends AppCompatActivity {
         }
 
         SensorProcess.getInstance().stopWorkout();
+
+        SensorProcess.getInstance().cancelLearning();
+
 
         super.onDestroy();
     }

@@ -215,6 +215,11 @@ public class RepCounter {
     }
 
     public int getreps() { return reps; }
+
+    public void resetRepCount() {
+        reps = 0;
+    }
+
     public boolean isReady() { return reference != null; }
     public float getLastMatchScore() { return lastScore; }
 
