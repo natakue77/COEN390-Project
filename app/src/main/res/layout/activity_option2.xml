@@ -113,6 +113,7 @@
                         android:layout_marginBottom="12dp" />
 
                     <FrameLayout
+                        android:id="@+id/workoutGraphContainer"
                         android:layout_width="match_parent"
                         android:layout_height="220dp"
                         android:background="#202329">
@@ -208,6 +209,7 @@
                         android:layout_marginBottom="12dp" />
 
                     <FrameLayout
+                        android:id="@+id/goalGraphContainer"
                         android:layout_width="match_parent"
                         android:layout_height="220dp"
                         android:background="#202329">

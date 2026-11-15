@@ -172,6 +172,48 @@ public class RepCounter {
         return counted;
     }
 
+    public float[][] getReference() {
+        return reference;
+    }
+
+    public float getReferenceStrength() {
+        return referenceStrength;
+    }
+
+    public long getReferenceDurationUs() {
+        return referenceDurationUs;
+    }
+
+    public void loadReference(float[][] savedReference,
+                              float savedStrength,
+                              long savedDurationUs) {
+
+        if (savedReference == null ||
+                savedReference.length != POINTS ||
+                savedStrength <= 0 ||
+                savedDurationUs <= 0) {
+            return;
+        }
+
+        for (float[] row : savedReference) {
+            if (row == null || row.length != CHANNELS) {
+                return;
+            }
+        }
+
+        reset();
+
+        reference = new float[POINTS][CHANNELS];
+
+        for (int i = 0; i < POINTS; i++) {
+            System.arraycopy(savedReference[i], 0,
+                    reference[i], 0, CHANNELS);
+        }
+
+        referenceStrength = savedStrength;
+        referenceDurationUs = savedDurationUs;
+    }
+
     public int getreps() { return reps; }
     public boolean isReady() { return reference != null; }
     public float getLastMatchScore() { return lastScore; }

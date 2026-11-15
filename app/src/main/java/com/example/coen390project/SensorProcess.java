@@ -1,6 +1,7 @@
 package com.example.coen390project;
 
 import java.util.ArrayList;
+import android.content.Context;
 
 public class SensorProcess {
     private double vx,vy,vz, x,y,z;
@@ -21,6 +22,7 @@ public class SensorProcess {
     private long lastPrint = 0;
 
     private boolean learning = false;
+    private boolean workoutActive = false;
 
     private final ArrayList<BLEManager.SensorSample> learningSamples =
             new ArrayList<>();
@@ -38,7 +40,7 @@ public class SensorProcess {
 
         if (learning) {
             learningSamples.add(sample);
-        } else if (repCounter.update(sample)) {
+        } else if (workoutActive && repCounter.update(sample)) {
             android.util.Log.d("BarbellBLE",
                     "Rep counted: " + repCounter.getreps() +
                             " | DTW score: " + repCounter.getLastMatchScore());
@@ -191,5 +193,39 @@ public class SensorProcess {
         return learning;
     }
 
+    public boolean loadExercise(Context context, String exerciseName) {
+        learning = false;
+        learningSamples.clear();
+        repCounter.reset();
+
+        return ExerciseProfileStorage.loadProfile(
+                context, exerciseName, repCounter);
+    }
+
+    public boolean saveExercise(Context context, String exerciseName) {
+        if (learning || !repCounter.isReady()) {
+            return false;
+        }
+
+        ExerciseProfileStorage.saveProfile(
+                context, exerciseName, repCounter);
+
+        return true;
+    }
+
+
+    public void startWorkout() {
+        if (!learning && repCounter.isReady()) {
+            workoutActive = true;
+        }
+    }
+
+    public void stopWorkout() {
+        workoutActive = false;
+    }
+
+    public int getRepCount() {
+        return repCounter.getreps();
+    }
 
 }
