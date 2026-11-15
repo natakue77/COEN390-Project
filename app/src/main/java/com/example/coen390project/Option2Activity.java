@@ -31,6 +31,7 @@ import com.google.android.material.navigation.NavigationView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.ArrayList;
+import androidx.activity.OnBackPressedCallback;
 
 
 public class Option2Activity extends AppCompatActivity {
@@ -115,6 +116,7 @@ public class Option2Activity extends AppCompatActivity {
 
         setupSpinners();
         setupGoalSaving();
+        setupBackButton();
     }
 
 
@@ -465,16 +467,26 @@ public class Option2Activity extends AppCompatActivity {
         }
     }
 
-    @Override
-    public void onBackPressed() {
 
-        if (drawerLayout != null &&
-                drawerLayout.isDrawerOpen(GravityCompat.START)) {
+    private void setupBackButton() {
 
-            drawerLayout.closeDrawer(GravityCompat.START);
+        getOnBackPressedDispatcher().addCallback(this,
+                new OnBackPressedCallback(true) {
 
-        } else {
-            super.onBackPressed();
-        }
+                    @Override
+                    public void handleOnBackPressed() {
+
+                        if (drawerLayout != null &&
+                                drawerLayout.isDrawerOpen(GravityCompat.START)) {
+
+                            drawerLayout.closeDrawer(GravityCompat.START);
+
+                        } else {
+                            setEnabled(false);
+                            getOnBackPressedDispatcher().onBackPressed();
+                        }
+                    }
+                });
     }
+
 }
