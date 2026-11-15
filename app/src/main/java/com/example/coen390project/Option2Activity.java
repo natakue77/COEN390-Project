@@ -27,6 +27,12 @@ import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.google.android.material.navigation.NavigationView;
 
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.util.ArrayList;
+
+
 public class Option2Activity extends AppCompatActivity {
 
     private Spinner workoutSpinner;
@@ -111,6 +117,16 @@ public class Option2Activity extends AppCompatActivity {
         setupGoalSaving();
     }
 
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (workoutSpinner != null) {
+            setupSpinners();
+        }
+    }
+
     private void setupDrawer(Toolbar toolbar) {
 
         drawerLayout = findViewById(R.id.drawerLayout);
@@ -175,13 +191,116 @@ public class Option2Activity extends AppCompatActivity {
         });
     }
 
+
+    private ArrayList<String> getCustomWorkouts() {
+
+        ArrayList<String> customWorkouts = new ArrayList<>();
+
+        SharedPreferences workoutPreferences = getSharedPreferences(
+                "CustomWorkoutPreferences",
+                MODE_PRIVATE
+        );
+
+        String saved = workoutPreferences.getString(
+                "customWorkoutLists",
+                "[]"
+        );
+
+        try {
+            JSONArray workouts = new JSONArray(saved);
+
+            for (int i = 0; i < workouts.length(); i++) {
+
+                JSONObject workout = workouts.optJSONObject(i);
+
+                if (workout != null) {
+                    String name = workout.optString("name", "");
+
+                    if (!name.isEmpty()) {
+                        customWorkouts.add(name);
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return customWorkouts;
+    }
+
     private void setupSpinners() {
 
+
         String[] workouts = {
+                "Bicep Curls",
+                "Tricep Extensions",
+                "Hammer Curls",
+                "Shoulder Press",
+                "Lateral Raises",
+                "Dumbbell Lateral Raises",
+                "Front Raises",
+                "Reverse Flyes",
+                "Arnold Press",
+                "Upright Rows",
+                "Face Pulls",
+                "Wrist Curls",
+                "Reverse Wrist Curls",
+                "Reverse Curls",
+                "Farmer's Carries",
+                "Dead Hangs",
+                "Wrist Roller",
+                "Standard Bicep Curls",
+                "Concentration Curls",
+                "Preacher Curls",
+                "Incline Dumbbell Curls",
+                "Cable Curls",
+                "EZ Bar Curls",
+                "Tricep Pushdowns",
+                "Overhead Tricep Extensions",
+                "Tricep Dips",
+                "Skull Crushers",
+                "Close-Grip Bench Press",
+                "Diamond Push-Ups",
+                "Dumbbell Kickbacks",
                 "Squats",
-                "Push-ups",
-                "Bicep Curls"
+                "Lunges",
+                "Leg Press",
+                "Calf Raises",
+                "Glute Bridges",
+                "Romanian Deadlifts",
+                "Leg Extensions",
+                "Leg Curls",
+                "Push-Ups",
+                "Bench Press",
+                "Incline Dumbbell Press",
+                "Chest Flyes",
+                "Cable Crossovers",
+                "Decline Bench Press",
+                "Dumbbell Pullovers",
+                "Pull-Ups",
+                "Lat Pulldowns",
+                "Bent-Over Rows",
+                "Seated Cable Rows",
+                "Deadlifts",
+                "Single-Arm Dumbbell Rows",
+                "Straight-Arm Pulldowns",
+                "T-Bar Rows"
         };
+
+
+        ArrayList<String> allWorkouts = new ArrayList<>();
+
+        for (String workout : workouts) {
+            allWorkouts.add(workout);
+        }
+
+        for (String customWorkout : getCustomWorkouts()) {
+            if (!allWorkouts.contains(customWorkout)) {
+                allWorkouts.add(customWorkout);
+            }
+        }
+
 
         String[] timelines = {
                 "Day",
@@ -192,7 +311,7 @@ public class Option2Activity extends AppCompatActivity {
         ArrayAdapter<String> workoutAdapter = new ArrayAdapter<String>(
                 this,
                 android.R.layout.simple_spinner_item,
-                workouts
+                allWorkouts
         ) {
             @Override
             public View getDropDownView(
