@@ -44,11 +44,11 @@ public class WorkoutProgressGraph extends View {
         float width = getWidth();
         float height = getHeight();
 
-        canvas.drawColor(Color.WHITE);
+        canvas.drawColor(Color.rgb(32, 35, 41));
 
         // Display a message if no workout data exists
         if (workoutData == null || workoutData.length == 0) {
-            paint.setColor(Color.GRAY);
+            paint.setColor(Color.WHITE);
             paint.setTextAlign(Paint.Align.CENTER);
             canvas.drawText(
                     "No workout data available",
@@ -60,7 +60,7 @@ public class WorkoutProgressGraph extends View {
         }
 
         // Draw the graph axes
-        paint.setColor(Color.BLACK);
+        paint.setColor(Color.WHITE);
         paint.setStrokeWidth(3);
 
         float left = 70;

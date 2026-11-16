@@ -27,6 +27,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 
 import java.util.ArrayList;
+import android.content.Intent;
 
 public class ExerciseListActivity extends AppCompatActivity {
 
@@ -370,6 +371,18 @@ public class ExerciseListActivity extends AppCompatActivity {
                     confirmRemoveWorkout(exerciseName)
             );
         }
+
+        if (!routineSelectionMode) {
+            card.setOnClickListener(v -> {
+                Intent intent = new Intent(
+                        ExerciseListActivity.this,
+                        WorkoutSessionActivity.class
+                );
+                intent.putExtra("EXERCISE_NAME", exerciseName);
+                startActivity(intent);
+            });
+        }
+
 
         exerciseContainer.addView(card);
     }

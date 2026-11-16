@@ -32,11 +32,14 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.ArrayList;
 import androidx.activity.OnBackPressedCallback;
+import android.widget.FrameLayout;
 
 
 public class Option2Activity extends AppCompatActivity {
 
     private Spinner workoutSpinner;
+    private FrameLayout workoutGraphContainer;
+    private FrameLayout goalGraphContainer;
     private Spinner timelineSpinner;
     private EditText goalEditText;
     private Button saveGoalButton;
@@ -103,6 +106,8 @@ public class Option2Activity extends AppCompatActivity {
         setupDrawer(toolbar);
 
         workoutSpinner = findViewById(R.id.workoutSpinner);
+        workoutGraphContainer = findViewById(R.id.workoutGraphContainer);
+        goalGraphContainer = findViewById(R.id.goalGraphContainer);
         timelineSpinner = findViewById(R.id.timelineSpinner);
         goalEditText = findViewById(R.id.goalEditText);
         saveGoalButton = findViewById(R.id.saveGoalButton);
@@ -377,6 +382,7 @@ public class Option2Activity extends AppCompatActivity {
                             long id) {
 
                         loadGoal();
+                        displayWorkoutHistory();
                     }
 
                     @Override
@@ -384,6 +390,26 @@ public class Option2Activity extends AppCompatActivity {
                     }
                 }
         );
+
+        timelineSpinner.setOnItemSelectedListener(
+                new AdapterView.OnItemSelectedListener() {
+
+                    @Override
+                    public void onItemSelected(
+                            AdapterView<?> parent,
+                            View view,
+                            int position,
+                            long id) {
+
+                        displayWorkoutHistory();
+                    }
+
+                    @Override
+                    public void onNothingSelected(AdapterView<?> parent) {
+                    }
+                }
+        );
+
     }
 
     private void setupGoalSaving() {
@@ -428,6 +454,7 @@ public class Option2Activity extends AppCompatActivity {
             preferences.edit()
                     .putInt(workout, target)
                     .apply();
+            displayWorkoutHistory();
 
             loadGoal();
 
@@ -488,5 +515,115 @@ public class Option2Activity extends AppCompatActivity {
                     }
                 });
     }
+
+    private void displayWorkoutHistory() {
+
+        if (workoutGraphContainer == null ||
+                workoutSpinner.getSelectedItem() == null) {
+            return;
+        }
+
+        String selectedExercise =
+                workoutSpinner.getSelectedItem().toString();
+
+        JSONArray history = WorkoutHistoryStorage.getHistory(this);
+
+        int totalReps = 0;
+        int sessionCount = 0;
+
+        java.util.ArrayList<Float> repData = new java.util.ArrayList<>();
+
+
+        String selectedTimeline = timelineSpinner.getSelectedItem() == null
+                ? "Day"
+                : timelineSpinner.getSelectedItem().toString();
+
+        java.util.Calendar start = java.util.Calendar.getInstance();
+
+        if (selectedTimeline.equals("Day")) {
+            start.set(java.util.Calendar.HOUR_OF_DAY, 0);
+            start.set(java.util.Calendar.MINUTE, 0);
+            start.set(java.util.Calendar.SECOND, 0);
+            start.set(java.util.Calendar.MILLISECOND, 0);
+
+        } else if (selectedTimeline.equals("Week")) {
+            start.set(java.util.Calendar.DAY_OF_WEEK,
+                    start.getFirstDayOfWeek());
+            start.set(java.util.Calendar.HOUR_OF_DAY, 0);
+            start.set(java.util.Calendar.MINUTE, 0);
+            start.set(java.util.Calendar.SECOND, 0);
+            start.set(java.util.Calendar.MILLISECOND, 0);
+
+        } else if (selectedTimeline.equals("Month")) {
+            start.set(java.util.Calendar.DAY_OF_MONTH, 1);
+            start.set(java.util.Calendar.HOUR_OF_DAY, 0);
+            start.set(java.util.Calendar.MINUTE, 0);
+            start.set(java.util.Calendar.SECOND, 0);
+            start.set(java.util.Calendar.MILLISECOND, 0);
+        }
+
+        long startTime = start.getTimeInMillis();
+        long endTime = System.currentTimeMillis();
+
+        for (int i = 0; i < history.length(); i++) {
+            JSONObject workout = history.optJSONObject(i);
+
+
+            if (workout != null &&
+                    selectedExercise.equals(workout.optString("exercise")) &&
+                    workout.optLong("date", 0) >= startTime &&
+                    workout.optLong("date", 0) <= endTime) {
+
+
+                totalReps += workout.optInt("reps", 0);
+                sessionCount++;
+
+                repData.add((float) workout.optInt("reps", 0));
+
+            }
+        }
+
+        workoutGraphContainer.removeAllViews();
+
+        WorkoutProgressGraph graph = new WorkoutProgressGraph(this);
+
+
+        float[] graphData = new float[repData.size()];
+
+        for (int i = 0; i < repData.size(); i++) {
+            graphData[i] = repData.get(i);
+        }
+
+        graph.setWorkoutData(graphData);
+
+        int targetGoal = preferences.getInt(selectedExercise, 0);
+
+        displayGoalAnalytics(totalReps, targetGoal);
+
+
+
+        workoutGraphContainer.addView(graph,
+                new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT));
+    }
+
+    private void displayGoalAnalytics(float progress, float goal) {
+
+        if (goalGraphContainer == null) {
+            return;
+        }
+
+        goalGraphContainer.removeAllViews();
+
+        GoalAnalyticsGraph graph = new GoalAnalyticsGraph(this);
+        graph.setGoalData(progress, goal);
+
+        goalGraphContainer.addView(graph,
+                new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT));
+    }
+
 
 }

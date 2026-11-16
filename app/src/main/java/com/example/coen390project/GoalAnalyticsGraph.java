@@ -45,13 +45,13 @@ public class GoalAnalyticsGraph extends View {
         float width = getWidth();
         float height = getHeight();
 
-        canvas.drawColor(Color.WHITE);
+        canvas.drawColor(Color.rgb(32, 35, 41));
 
         paint.setTextAlign(Paint.Align.CENTER);
 
         // No goal has been set yet
         if (targetGoal <= 0) {
-            paint.setColor(Color.GRAY);
+            paint.setColor(Color.WHITE);
             canvas.drawText(
                     "No goal data available",
                     width / 2,
@@ -96,7 +96,7 @@ public class GoalAnalyticsGraph extends View {
         );
 
         // Display percentage
-        paint.setColor(Color.BLACK);
+        paint.setColor(Color.WHITE);
 
         canvas.drawText(
                 String.format("%.0f%%", percentage),
