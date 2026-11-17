@@ -16,7 +16,6 @@
         android:orientation="vertical"
         android:background="#111214">
 
-        <!-- TOOLBAR -->
         <androidx.appcompat.widget.Toolbar
             android:id="@+id/optionToolbar"
             android:layout_width="match_parent"
@@ -40,17 +39,42 @@
                 android:orientation="vertical"
                 android:padding="16dp">
 
-                <!-- WORKOUT PROGRESS -->
-                <TextView
+                <!-- WORKOUT PROGRESS HEADING AND RESET BUTTON -->
+
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Workout Progress"
-                    android:textSize="21sp"
-                    android:textStyle="bold"
-                    android:textColor="#FFFFFF"
-                    android:layout_marginBottom="18dp" />
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="16dp">
 
-                <!-- WORKOUT SELECTOR CARD -->
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Workout Progress"
+                        android:textSize="21sp"
+                        android:textStyle="bold"
+                        android:textColor="#FFFFFF" />
+
+                    <Button
+                        android:id="@+id/btnResetWorkouts"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:text="Reset"
+                        android:textAllCaps="false"
+                        android:textSize="12sp"
+                        android:textColor="#FFFFFF"
+                        android:backgroundTint="#D32F2F" />
+
+                </LinearLayout>
+
+                <!-- WORKOUT SELECTION -->
+
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -62,28 +86,44 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Select Workout"
+                        android:text="Selected Workout"
                         android:textColor="#FFFFFF"
                         android:textSize="15sp"
                         android:textStyle="bold"
                         android:layout_marginBottom="8dp" />
 
-                    <Spinner
-                        android:id="@+id/workoutSpinner"
+                    <Button
+                        android:id="@+id/btnSelectWorkout"
                         android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:backgroundTint="#EF5350"
-                        android:popupBackground="#292D35" />
+                        android:layout_height="50dp"
+                        android:text="Choose a Workout"
+                        android:textColor="#FFFFFF"
+                        android:textStyle="bold"
+                        android:backgroundTint="#D32F2F"
+                        android:visibility="visible" />
+
+                    <TextView
+                        android:id="@+id/tvSelectedWorkout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="No workout selected"
+                        android:textColor="#FFFFFF"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:padding="12dp"
+                        android:background="#202329"
+                        android:layout_marginTop="4dp"
+                        android:visibility="gone" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Select Timeline"
+                        android:text="Timeline"
                         android:textColor="#FFFFFF"
                         android:textSize="15sp"
                         android:textStyle="bold"
-                        android:layout_marginTop="14dp"
-                        android:layout_marginBottom="8dp" />
+                        android:layout_marginTop="16dp"
+                        android:layout_marginBottom="6dp" />
 
                     <Spinner
                         android:id="@+id/timelineSpinner"
@@ -92,9 +132,27 @@
                         android:backgroundTint="#EF5350"
                         android:popupBackground="#292D35" />
 
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Graph Variable"
+                        android:textColor="#FFFFFF"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        android:layout_marginTop="16dp"
+                        android:layout_marginBottom="6dp" />
+
+                    <Spinner
+                        android:id="@+id/variableSpinner"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:backgroundTint="#EF5350"
+                        android:popupBackground="#292D35" />
+
                 </LinearLayout>
 
-                <!-- WORKOUT GRAPH PLACEHOLDER -->
+                <!-- WORKOUT GRAPH -->
+
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -104,6 +162,7 @@
                     android:layout_marginBottom="28dp">
 
                     <TextView
+                        android:id="@+id/tvWorkoutGraphTitle"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="Workout Performance"
@@ -112,25 +171,16 @@
                         android:textStyle="bold"
                         android:layout_marginBottom="12dp" />
 
-                    <FrameLayout
-                        android:id="@+id/workoutGraphContainer"
+                    <com.example.coen390project.ProgressGraphView
+                        android:id="@+id/workoutGraph"
                         android:layout_width="match_parent"
-                        android:layout_height="220dp"
-                        android:background="#202329">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="center"
-                            android:text="Workout graph will appear here"
-                            android:textColor="#8F95A1"
-                            android:textSize="14sp" />
-
-                    </FrameLayout>
+                        android:layout_height="240dp"
+                        android:background="#202329" />
 
                 </LinearLayout>
 
                 <!-- GOAL ANALYTICS -->
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -138,9 +188,8 @@
                     android:textSize="21sp"
                     android:textStyle="bold"
                     android:textColor="#FFFFFF"
-                    android:layout_marginBottom="18dp" />
+                    android:layout_marginBottom="16dp" />
 
-                <!-- GOAL INPUT CARD -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -152,23 +201,56 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Set Your Repetition Goal"
+                        android:text="Goal Type"
                         android:textColor="#FFFFFF"
                         android:textSize="15sp"
                         android:textStyle="bold"
-                        android:layout_marginBottom="10dp" />
+                        android:layout_marginBottom="6dp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Goal Workout"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:layout_marginTop="12dp"
+                        android:layout_marginBottom="6dp" />
+
+                    <Spinner
+                        android:id="@+id/goalWorkoutSpinner"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:backgroundTint="#8F95A1"
+                        android:spinnerMode="dropdown" />
+
+                    <Spinner
+                        android:id="@+id/goalTypeSpinner"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:backgroundTint="#EF5350"
+                        android:popupBackground="#292D35" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Target Value"
+                        android:textColor="#FFFFFF"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        android:layout_marginTop="14dp"
+                        android:layout_marginBottom="6dp" />
 
                     <EditText
                         android:id="@+id/goalEditText"
                         android:layout_width="match_parent"
                         android:layout_height="52dp"
-                        android:hint="Enter target repetitions"
-                        android:inputType="number"
+                        android:hint="Enter target"
+                        android:inputType="numberDecimal"
                         android:textColor="#FFFFFF"
                         android:textColorHint="#8F95A1"
                         android:backgroundTint="#EF5350"
-                        android:padding="10dp"
-                        android:layout_marginBottom="14dp" />
+                        android:padding="10dp" />
 
                     <Button
                         android:id="@+id/saveGoalButton"
@@ -178,19 +260,21 @@
                         android:textColor="#FFFFFF"
                         android:textStyle="bold"
                         android:backgroundTint="#D32F2F"
-                        android:layout_marginBottom="14dp" />
+                        android:layout_marginTop="14dp"
+                        android:layout_marginBottom="12dp" />
 
                     <TextView
                         android:id="@+id/goalDescriptionTextView"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Your goal progress will appear here."
+                        android:text="Choose a workout and set a goal."
                         android:textColor="#8F95A1"
                         android:textSize="14sp" />
 
                 </LinearLayout>
 
-                <!-- GOAL GRAPH PLACEHOLDER -->
+                <!-- GOAL GRAPH -->
+
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -200,6 +284,7 @@
                     android:layout_marginBottom="20dp">
 
                     <TextView
+                        android:id="@+id/tvGoalGraphTitle"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="Goal Progress"
@@ -208,21 +293,11 @@
                         android:textStyle="bold"
                         android:layout_marginBottom="12dp" />
 
-                    <FrameLayout
-                        android:id="@+id/goalGraphContainer"
+                    <com.example.coen390project.ProgressGraphView
+                        android:id="@+id/goalGraph"
                         android:layout_width="match_parent"
-                        android:layout_height="220dp"
-                        android:background="#202329">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="center"
-                            android:text="Goal analytics graph will appear here"
-                            android:textColor="#8F95A1"
-                            android:textSize="14sp" />
-
-                    </FrameLayout>
+                        android:layout_height="240dp"
+                        android:background="#202329" />
 
                 </LinearLayout>
 
@@ -232,7 +307,6 @@
 
     </LinearLayout>
 
-    <!-- NAVIGATION DRAWER -->
     <com.google.android.material.navigation.NavigationView
         android:id="@+id/navigationView"
         android:layout_width="280dp"

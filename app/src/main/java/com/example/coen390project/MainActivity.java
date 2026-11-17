@@ -7,7 +7,9 @@ import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.Typeface;
+import android.graphics.DashPathEffect;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
@@ -23,6 +25,7 @@ import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.ActionBarDrawerToggle;
@@ -32,10 +35,14 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.GravityCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
-import androidx.core.view.WindowCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.google.android.material.navigation.NavigationView;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -43,36 +50,67 @@ import org.json.JSONObject;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity
         implements BLEManager.Listener {
 
+    // =================================================
+    // DASHBOARD AND NAVIGATION
+    // =================================================
+
     private DrawerLayout drawerLayout;
     private LinearLayout dashboardContainer;
 
+    private TextView workoutName, workoutDetails, workoutWeight;
+    private TextView workoutWeightUnit, workoutReps, workoutSets;
+    private TextView weeklyNumber, weeklyDescription, upcomingDescription;
+
+    private Button checkButton, setButton;
+
+    private final ArrayList<ExerciseEntry> todayExerciseEntries =
+            new ArrayList<>();
+
+    private int currentExercise = 0;
+    private int progressPage = 0;
+
+    private SharedPreferences weightPreferences;
+    private DatabaseReference completedWorkoutsRef;
+
+    private ProgressGraphView homeProgressGraph;
+    private TextView homeProgressHeading;
+    private TextView homeProgressHint;
+
+    private final int WHITE = Color.WHITE;
+    private final int MUTED = Color.rgb(143, 149, 161);
+    private final int CARD_COLOR = Color.rgb(41, 45, 53);
+
+    private static final double KG_TO_LB = 2.2046226218;
+
+    private static final String PREF_GOALS = "WorkoutGoals";
+    private static final String KEY_HOME_WORKOUT = "dashboard_selected_workout";
+    private static final String KEY_HOME_GOAL_TYPE = "dashboard_goal_type";
+
     // =================================================
-    // BLE AND SENSOR HARDWARE
+    // ESP32 BLUETOOTH HARDWARE
     // =================================================
 
     private BLEManager bleManager;
 
-    private SensorProcess sensorProcess =
-            SensorProcess.getInstance();
+    private SensorProcess sensorProcess = new SensorProcess();
 
     private final ActivityResultLauncher<String[]> permissionLauncher =
             registerForActivityResult(
                     new ActivityResultContracts.RequestMultiplePermissions(),
                     result -> {
-
-                        if (bleManager != null
-                                && bleManager.hasPermissions()) {
-
+                        if (bleManager != null && bleManager.hasPermissions()) {
                             bleManager.scanAndConnect();
-
                         } else {
-
                             Toast.makeText(
                                     this,
                                     "Bluetooth permissions denied",
@@ -83,31 +121,43 @@ public class MainActivity extends AppCompatActivity
             );
 
     // =================================================
-    // DASHBOARD VARIABLES
+    // DATA CLASSES
     // =================================================
 
-    private TextView workoutName;
-    private TextView workoutDetails;
-    private TextView workoutWeight;
+    private static class ExerciseEntry {
+        String name;
+        String sessionKey;
+        String sessionDate;
+        String sessionTime;
+        int exerciseIndex;
+        int sessionExerciseCount;
 
-    private TextView weeklyNumber;
-    private TextView weeklyDescription;
-    private TextView upcomingDescription;
+        ExerciseEntry(String name, String sessionKey, String sessionDate,
+                      String sessionTime, int exerciseIndex,
+                      int sessionExerciseCount) {
+            this.name = name;
+            this.sessionKey = sessionKey;
+            this.sessionDate = sessionDate;
+            this.sessionTime = sessionTime;
+            this.exerciseIndex = exerciseIndex;
+            this.sessionExerciseCount = sessionExerciseCount;
+        }
+    }
 
-    private final ArrayList<String> todayExercises =
-            new ArrayList<>();
+    private static class HomeExerciseRecord {
+        String name;
+        int reps;
+        String weight;
+        String weightUnit;
+    }
 
-    private int currentExercise = 0;
-    private int progressPage = 0;
-
-    private SharedPreferences weightPreferences;
-
-    private final int WHITE = Color.WHITE;
-    private final int MUTED = Color.rgb(143, 149, 161);
-    private final int CARD_COLOR = Color.rgb(41, 45, 53);
+    private static class HomeCompletedSession {
+        String date;
+        ArrayList<HomeExerciseRecord> exercises = new ArrayList<>();
+    }
 
     // =================================================
-    // IMAGE SIZE SETTINGS
+    // DASHBOARD IMAGE SIZES AND POSITIONS
     // =================================================
 
     private static final int DUMBBELL_WIDTH = 40;
@@ -125,30 +175,11 @@ public class MainActivity extends AppCompatActivity
     private static final int HEART_WIDTH = 32;
     private static final int HEART_HEIGHT = 32;
 
-    // =================================================
-    // ICON PLACEMENT SETTINGS
-    // =================================================
-
-    private static final int DUMBBELL_PLACEMENT =
-            Gravity.START | Gravity.CENTER_VERTICAL;
-
-    private static final int WEEKLY_PLACEMENT =
-            Gravity.CENTER;
-
-    private static final int PROGRESS_PLACEMENT =
-            Gravity.CENTER;
+    private static final int WEEKLY_PLACEMENT = Gravity.CENTER;
+    private static final int PROGRESS_PLACEMENT = Gravity.CENTER;
 
     private static final int UPCOMING_PLACEMENT =
             Gravity.START | Gravity.CENTER_VERTICAL;
-
-    // =================================================
-    // ICON MARGINS
-    // =================================================
-
-    private static final int DUMBBELL_LEFT = -10;
-    private static final int DUMBBELL_TOP = 2;
-    private static final int DUMBBELL_RIGHT = 0;
-    private static final int DUMBBELL_BOTTOM = 0;
 
     private static final int WEEKLY_LEFT = -27;
     private static final int WEEKLY_TOP = 0;
@@ -173,20 +204,20 @@ public class MainActivity extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        WindowCompat.setDecorFitsSystemWindows(
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(
                 getWindow(), false
         );
 
         setContentView(R.layout.activity_main);
 
-        View mainContent = findViewById(R.id.mainContent);
+        // Initialize ESP32 Bluetooth manager.
+        bleManager = new BLEManager(this, this);
 
+        View mainContent = findViewById(R.id.mainContent);
         int originalTopPadding = mainContent.getPaddingTop();
 
-        ViewCompat.setOnApplyWindowInsetsListener(
-                mainContent,
+        ViewCompat.setOnApplyWindowInsetsListener(mainContent,
                 (view, windowInsets) -> {
-
                     Insets insets = windowInsets.getInsets(
                             WindowInsetsCompat.Type.statusBars()
                                     | WindowInsetsCompat.Type.displayCutout()
@@ -200,28 +231,23 @@ public class MainActivity extends AppCompatActivity
                     );
 
                     return windowInsets;
-                }
-        );
+                });
 
         ViewCompat.requestApplyInsets(mainContent);
 
-        // Initialize BLE manager before attempting connection.
-        bleManager = new BLEManager(this, this);
-
         weightPreferences = getSharedPreferences(
-                "DashboardExerciseWeights",
-                MODE_PRIVATE
+                "DashboardExerciseWeights", MODE_PRIVATE
         );
 
-        dashboardContainer = findViewById(
-                R.id.dashboardContainer
-        );
+        completedWorkoutsRef = FirebaseDatabase.getInstance()
+                .getReference("completedWorkouts");
+
+        dashboardContainer = findViewById(R.id.dashboardContainer);
 
         setupToolbar();
-
         buildDashboard();
 
-        // Start ESP32 connection after initialization.
+        // Start searching for the ESP32 tracker.
         connectToTracker();
     }
 
@@ -230,28 +256,20 @@ public class MainActivity extends AppCompatActivity
     // =================================================
 
     private void setupToolbar() {
-
         androidx.appcompat.widget.Toolbar toolbar =
                 findViewById(R.id.mainToolbar);
 
         setSupportActionBar(toolbar);
 
-        TextView toolbarTitle = null;
-
         for (int i = 0; i < toolbar.getChildCount(); i++) {
-
             View child = toolbar.getChildAt(i);
 
             if (child instanceof TextView) {
-                toolbarTitle = (TextView) child;
+                child.setTranslationY(
+                        -7 * getResources().getDisplayMetrics().density
+                );
                 break;
             }
-        }
-
-        if (toolbarTitle != null) {
-            toolbarTitle.setTranslationY(
-                    -7 * getResources().getDisplayMetrics().density
-            );
         }
 
         if (getSupportActionBar() != null) {
@@ -275,32 +293,25 @@ public class MainActivity extends AppCompatActivity
         toggle.syncState();
 
         navigationView.setNavigationItemSelectedListener(item -> {
-
             int id = item.getItemId();
 
             if (id == R.id.nav_home) {
-
                 drawerLayout.closeDrawer(GravityCompat.START);
                 return true;
 
             } else if (id == R.id.nav_workouts) {
-
                 openActivity(Option1Activity.class);
 
             } else if (id == R.id.nav_progress) {
-
                 openActivity(Option2Activity.class);
 
             } else if (id == R.id.nav_routine) {
-
                 openActivity(Option3Activity.class);
 
             } else if (id == R.id.nav_tips) {
-
                 openActivity(Option4Activity.class);
 
             } else if (id == R.id.nav_settings) {
-
                 openActivity(Option5Activity.class);
             }
 
@@ -310,18 +321,11 @@ public class MainActivity extends AppCompatActivity
 
         getOnBackPressedDispatcher().addCallback(
                 this,
-                new androidx.activity.OnBackPressedCallback(true) {
-
+                new OnBackPressedCallback(true) {
                     @Override
                     public void handleOnBackPressed() {
-
-                        if (drawerLayout.isDrawerOpen(
-                                GravityCompat.START)) {
-
-                            drawerLayout.closeDrawer(
-                                    GravityCompat.START
-                            );
-
+                        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                            drawerLayout.closeDrawer(GravityCompat.START);
                         } else {
                             finish();
                         }
@@ -335,59 +339,43 @@ public class MainActivity extends AppCompatActivity
     }
 
     // =================================================
-    // DASHBOARD LAYOUT
+    // DASHBOARD
     // =================================================
 
     private void buildDashboard() {
-
         dashboardContainer.removeAllViews();
 
         loadTodayExercises();
 
         addWelcomeHeader();
-
         addWorkoutWidget();
-
         addWeeklyAndUpcomingRow();
-
         addProgressWidget();
-
         addHeartRateWidget();
     }
 
     private void addWelcomeHeader() {
-
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
         header.setPadding(0, dp(8), 0, dp(20));
 
-        TextView title = createText(
-                "Welcome Back!",
-                25,
-                WHITE,
-                true
-        );
+        header.addView(createText(
+                "Welcome Back!", 25, WHITE, true
+        ));
 
-        TextView subtitle = createText(
-                "READY FOR YOUR NEXT SESSION?",
-                11,
-                MUTED,
-                true
-        );
-
-        header.addView(title);
-        header.addView(subtitle);
+        header.addView(createText(
+                "READY FOR YOUR NEXT SESSION?", 11, MUTED, true
+        ));
 
         dashboardContainer.addView(header);
     }
 
     // =================================================
-    // TODAY'S WORKOUT
+    // TODAY'S ROUTINE EXERCISES
     // =================================================
 
     private void loadTodayExercises() {
-
-        todayExercises.clear();
+        todayExerciseEntries.clear();
 
         String today = formatDate(System.currentTimeMillis());
 
@@ -395,45 +383,102 @@ public class MainActivity extends AppCompatActivity
                 RoutineStorage.getSessionsForDate(this, today);
 
         for (int i = 0; i < sessions.length(); i++) {
-
             JSONObject session = sessions.optJSONObject(i);
 
-            if (session == null) {
-                continue;
+            if (session == null) continue;
+
+            JSONArray exercises = session.optJSONArray("exercises");
+
+            if (exercises == null) continue;
+
+            String sessionId = session.optString("id", "");
+            String sessionTime = session.optString("time", "");
+
+            String sessionKey;
+
+            if (!sessionId.isEmpty()) {
+                sessionKey = today + "_" + sessionId;
+            } else {
+                sessionKey = today + "_"
+                        + sessionTime.replaceAll("[^a-zA-Z0-9]", "_")
+                        + "_" + i;
             }
 
-            JSONArray exercises =
-                    session.optJSONArray("exercises");
-
-            if (exercises == null) {
-                continue;
-            }
+            sessionKey = sessionKey.replaceAll(
+                    "[^a-zA-Z0-9_-]", "_"
+            );
 
             for (int j = 0; j < exercises.length(); j++) {
-
                 String name = exercises.optString(j, "").trim();
 
-                if (!name.isEmpty()) {
-                    todayExercises.add(name);
-                }
+                if (name.isEmpty()) continue;
+
+                todayExerciseEntries.add(new ExerciseEntry(
+                        name,
+                        sessionKey,
+                        today,
+                        sessionTime,
+                        j,
+                        exercises.length()
+                ));
             }
         }
 
-        currentExercise = 0;
+        currentExercise = findNextUncompletedExercise(-1);
     }
 
-    private void addWorkoutWidget() {
+    private String exercisePreferenceKey(
+            String type, ExerciseEntry entry) {
 
+        return type + "_" + entry.sessionKey
+                + "_" + entry.exerciseIndex;
+    }
+
+    private int getExerciseReps(ExerciseEntry entry) {
+        return weightPreferences.getInt(
+                exercisePreferenceKey("reps", entry), 0
+        );
+    }
+
+    private int getExerciseSets(ExerciseEntry entry) {
+        return weightPreferences.getInt(
+                exercisePreferenceKey("sets", entry), 0
+        );
+    }
+
+    private boolean isExerciseCompleted(ExerciseEntry entry) {
+        return weightPreferences.getBoolean(
+                exercisePreferenceKey("done", entry), false
+        );
+    }
+
+    private int findNextUncompletedExercise(int startIndex) {
+        int size = todayExerciseEntries.size();
+
+        if (size == 0) return -1;
+
+        for (int offset = 1; offset <= size; offset++) {
+            int index = (startIndex + offset) % size;
+
+            if (!isExerciseCompleted(todayExerciseEntries.get(index))) {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    // =================================================
+    // TODAY'S WORKOUT WIDGET
+    // =================================================
+
+    private void addWorkoutWidget() {
         LinearLayout card = createCard();
+        card.setPadding(dp(12), dp(10), dp(12), dp(10));
 
         LinearLayout topRow = new LinearLayout(this);
         topRow.setOrientation(LinearLayout.HORIZONTAL);
-        topRow.setGravity(DUMBBELL_PLACEMENT);
-
-        topRow.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        ));
+        topRow.setGravity(Gravity.CENTER_VERTICAL);
 
         addTitleIcon(
                 topRow,
@@ -441,128 +486,148 @@ public class MainActivity extends AppCompatActivity
                 "Dumbbell icon",
                 DUMBBELL_WIDTH,
                 DUMBBELL_HEIGHT,
-                DUMBBELL_LEFT,
-                DUMBBELL_TOP,
-                DUMBBELL_RIGHT,
-                DUMBBELL_BOTTOM
+                -10, 2, 0, 0
         );
 
         TextView heading = createText(
-                "TODAY'S WORKOUT",
-                13,
-                WHITE,
-                true
+                "TODAY'S WORKOUT", 12, WHITE, true
         );
 
-        topRow.addView(
-                heading,
-                new LinearLayout.LayoutParams(
-                        0,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        1
-                )
-        );
+        topRow.addView(heading, new LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1
+        ));
 
         Button menuButton = createSmallButton("⋮");
-        menuButton.setTextSize(23);
-
-        menuButton.setOnClickListener(v ->
-                showWorkoutMenu(menuButton)
-        );
+        menuButton.setTextSize(21);
+        menuButton.setOnClickListener(v -> showWorkoutMenu(menuButton));
 
         topRow.addView(menuButton);
-
         card.addView(topRow);
 
         LinearLayout playerRow = new LinearLayout(this);
         playerRow.setOrientation(LinearLayout.HORIZONTAL);
         playerRow.setGravity(Gravity.CENTER_VERTICAL);
-        playerRow.setPadding(0, dp(10), 0, dp(10));
+        playerRow.setPadding(0, dp(5), 0, dp(3));
 
         Button previous = createArrowButton("‹");
-
-        previous.setOnClickListener(v ->
-                changeExercise(-1)
-        );
+        previous.setOnClickListener(v -> changeExercise(-1));
 
         playerRow.addView(previous);
 
         LinearLayout center = new LinearLayout(this);
         center.setOrientation(LinearLayout.VERTICAL);
         center.setGravity(Gravity.CENTER);
-        center.setPadding(dp(4), 0, dp(4), 0);
+        center.setPadding(dp(3), 0, dp(3), 0);
 
-        workoutName = createText("", 20, WHITE, true);
+        workoutName = createText("", 18, WHITE, true);
         workoutName.setGravity(Gravity.CENTER);
+        center.addView(workoutName);
 
-        workoutDetails = createText("", 13, MUTED, false);
+        workoutDetails = createText("", 11, MUTED, false);
         workoutDetails.setGravity(Gravity.CENTER);
 
-        center.addView(workoutName);
-        center.addView(workoutDetails);
-
-        playerRow.addView(
-                center,
+        LinearLayout.LayoutParams detailsParams =
                 new LinearLayout.LayoutParams(
-                        0,
                         LinearLayout.LayoutParams.WRAP_CONTENT,
-                        1
-                )
-        );
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+
+        detailsParams.topMargin = dp(2);
+        center.addView(workoutDetails, detailsParams);
+
+        LinearLayout statsRow = new LinearLayout(this);
+        statsRow.setOrientation(LinearLayout.HORIZONTAL);
+        statsRow.setGravity(Gravity.CENTER);
+        statsRow.setPadding(0, dp(5), 0, dp(5));
+
+        workoutReps = createText("12 reps", 12, WHITE, true);
+        workoutReps.setGravity(Gravity.CENTER);
+
+        workoutSets = createText("0 sets", 12, WHITE, true);
+        workoutSets.setGravity(Gravity.CENTER);
+
+        statsRow.addView(workoutReps);
+        statsRow.addView(createText("  |  ", 12, MUTED, false));
+        statsRow.addView(workoutSets);
+
+        center.addView(statsRow);
+
+        LinearLayout controlsRow = new LinearLayout(this);
+        controlsRow.setOrientation(LinearLayout.HORIZONTAL);
+        controlsRow.setGravity(Gravity.CENTER);
+
+        setButton = createSquareActionButton("S");
+        setButton.setOnClickListener(v -> incrementSets());
+
+        checkButton = createSquareActionButton("✔");
+        checkButton.setTextSize(15);
+        checkButton.setOnClickListener(v -> completeCurrentExercise());
+
+        LinearLayout.LayoutParams actionParams =
+                new LinearLayout.LayoutParams(dp(36), dp(36));
+
+        actionParams.setMargins(dp(4), 0, dp(4), 0);
+
+        controlsRow.addView(setButton, actionParams);
+        controlsRow.addView(checkButton, actionParams);
+
+        LinearLayout.LayoutParams controlsParams =
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+
+        controlsParams.topMargin = dp(1);
+        center.addView(controlsRow, controlsParams);
+
+        playerRow.addView(center, new LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1
+        ));
 
         LinearLayout weightLayout = new LinearLayout(this);
         weightLayout.setOrientation(LinearLayout.VERTICAL);
         weightLayout.setGravity(Gravity.CENTER);
-        weightLayout.setPadding(dp(5), 0, dp(5), 0);
+        weightLayout.setPadding(dp(3), 0, dp(3), 0);
 
-        workoutWeight = createText("", 23, WHITE, true);
+        workoutWeight = createText("--", 19, WHITE, true);
         workoutWeight.setGravity(Gravity.CENTER);
 
-        TextView kg = createText("KG", 10, MUTED, true);
+        workoutWeightUnit = createText(
+                getPreferredWeightUnit(), 9, MUTED, true
+        );
+        workoutWeightUnit.setGravity(Gravity.CENTER);
 
         weightLayout.addView(workoutWeight);
-        weightLayout.addView(kg);
+        weightLayout.addView(workoutWeightUnit);
 
         playerRow.addView(weightLayout);
 
         Button next = createArrowButton("›");
-
-        next.setOnClickListener(v ->
-                changeExercise(1)
-        );
+        next.setOnClickListener(v -> changeExercise(1));
 
         playerRow.addView(next);
 
         card.addView(playerRow);
-
-        TextView footer = createText(
-                "‹  PREVIOUS EXERCISE                 NEXT EXERCISE  ›",
-                10,
-                MUTED,
-                true
-        );
-
-        footer.setGravity(Gravity.CENTER);
-        card.addView(footer);
-
         dashboardContainer.addView(card);
 
         updateWorkoutDisplay();
     }
 
     private void changeExercise(int direction) {
-
-        if (todayExercises.isEmpty()) {
-            return;
-        }
+        if (todayExerciseEntries.isEmpty()
+                || currentExercise == -1) return;
 
         currentExercise += direction;
 
         if (currentExercise < 0) {
-            currentExercise = todayExercises.size() - 1;
+            currentExercise = todayExerciseEntries.size() - 1;
         }
 
-        if (currentExercise >= todayExercises.size()) {
+        if (currentExercise >= todayExerciseEntries.size()) {
             currentExercise = 0;
         }
 
@@ -570,9 +635,11 @@ public class MainActivity extends AppCompatActivity
     }
 
     private void updateWorkoutDisplay() {
+        String preferredUnit = getPreferredWeightUnit();
 
-        if (todayExercises.isEmpty()) {
+        workoutWeightUnit.setText(preferredUnit);
 
+        if (todayExerciseEntries.isEmpty()) {
             workoutName.setText("No workout scheduled");
 
             workoutDetails.setText(
@@ -580,65 +647,298 @@ public class MainActivity extends AppCompatActivity
             );
 
             workoutWeight.setText("--");
+            workoutReps.setText("-- reps");
+            workoutSets.setText("-- sets");
 
+            checkButton.setEnabled(false);
+            setButton.setEnabled(false);
             return;
         }
 
-        String exercise = todayExercises.get(currentExercise);
+        if (currentExercise == -1) {
+            workoutName.setText("All workouts completed!");
+            workoutDetails.setText("Great work today!");
 
-        workoutName.setText(exercise);
+            workoutWeight.setText("--");
+            workoutReps.setText("-- reps");
+            workoutSets.setText("-- sets");
+
+            checkButton.setEnabled(false);
+            setButton.setEnabled(false);
+            return;
+        }
+
+        ExerciseEntry entry =
+                todayExerciseEntries.get(currentExercise);
+
+        workoutName.setText(entry.name);
 
         workoutDetails.setText(
                 "Exercise " + (currentExercise + 1)
-                        + " of " + todayExercises.size()
-                        + "\nReps and sets not configured"
+                        + " of " + todayExerciseEntries.size()
         );
 
-        String savedWeight = weightPreferences.getString(
-                weightKey(exercise),
-                "--"
-        );
+        workoutReps.setText(getExerciseReps(entry) + " reps");
+        workoutSets.setText(getExerciseSets(entry) + " sets");
 
-        workoutWeight.setText(savedWeight);
+        String key = weightKey(entry.name);
+
+        String savedWeight =
+                weightPreferences.getString(key, "--");
+
+        String savedUnit =
+                weightPreferences.getString("unit_" + key, "KG");
+
+        String displayWeight = savedWeight;
+
+        if (!savedWeight.equals("--") && !savedWeight.isEmpty()
+                && !savedUnit.equalsIgnoreCase(preferredUnit)) {
+
+            try {
+                double weight = Double.parseDouble(savedWeight);
+
+                if (savedUnit.equalsIgnoreCase("KG")
+                        && preferredUnit.equalsIgnoreCase("LB")) {
+
+                    weight *= KG_TO_LB;
+
+                } else if (savedUnit.equalsIgnoreCase("LB")
+                        && preferredUnit.equalsIgnoreCase("KG")) {
+
+                    weight /= KG_TO_LB;
+                }
+
+                displayWeight = String.valueOf(Math.round(weight));
+
+            } catch (NumberFormatException ignored) {
+                displayWeight = savedWeight;
+            }
+        }
+
+        workoutWeight.setText(displayWeight);
+        workoutWeightUnit.setText(preferredUnit);
+
+        boolean completed = isExerciseCompleted(entry);
+
+        checkButton.setEnabled(!completed);
+        setButton.setEnabled(!completed);
+
+        checkButton.setAlpha(completed ? 0.4f : 1f);
+        setButton.setAlpha(completed ? 0.4f : 1f);
+    }
+
+    private void incrementSets() {
+        if (currentExercise < 0
+                || currentExercise >= todayExerciseEntries.size()) return;
+
+        ExerciseEntry entry =
+                todayExerciseEntries.get(currentExercise);
+
+        if (isExerciseCompleted(entry)) return;
+
+        int sets = getExerciseSets(entry) + 1;
+
+        weightPreferences.edit()
+                .putInt(exercisePreferenceKey("sets", entry), sets)
+                .apply();
+
+        updateWorkoutDisplay();
+    }
+
+    private void completeCurrentExercise() {
+        if (currentExercise < 0
+                || currentExercise >= todayExerciseEntries.size()) return;
+
+        int completedIndex = currentExercise;
+
+        ExerciseEntry entry =
+                todayExerciseEntries.get(completedIndex);
+
+        if (isExerciseCompleted(entry)) return;
+
+        weightPreferences.edit()
+                .putBoolean(exercisePreferenceKey("done", entry), true)
+                .apply();
+
+        boolean sessionComplete = true;
+
+        for (ExerciseEntry other : todayExerciseEntries) {
+            if (other.sessionKey.equals(entry.sessionKey)
+                    && !isExerciseCompleted(other)) {
+
+                sessionComplete = false;
+                break;
+            }
+        }
+
+        if (sessionComplete) {
+            saveCompletedWorkout(entry.sessionKey);
+        }
+
+        currentExercise =
+                findNextUncompletedExercise(completedIndex);
+
+        updateWorkoutDisplay();
+
+        Toast.makeText(
+                this,
+                sessionComplete
+                        ? "Scheduled workout completed!"
+                        : "Exercise completed!",
+                Toast.LENGTH_SHORT
+        ).show();
+
+        if (currentExercise == -1) {
+            Toast.makeText(
+                    this,
+                    "All today's exercises completed!",
+                    Toast.LENGTH_LONG
+            ).show();
+        }
     }
 
     // =================================================
-    // WORKOUT MENU
+    // FIREBASE COMPLETED WORKOUT SAVING
+    // =================================================
+
+    private void saveCompletedWorkout(String sessionKey) {
+        if (weightPreferences.getBoolean(
+                "uploaded_" + sessionKey, false)) {
+            return;
+        }
+
+        Map<String, Object> workoutData = new HashMap<>();
+
+        workoutData.put("sessionId", sessionKey);
+        workoutData.put("date", formatDate(System.currentTimeMillis()));
+        workoutData.put("completionTime", System.currentTimeMillis());
+        workoutData.put("completed", true);
+
+        ArrayList<Map<String, Object>> exercises = new ArrayList<>();
+
+        for (ExerciseEntry entry : todayExerciseEntries) {
+            if (!entry.sessionKey.equals(sessionKey)) continue;
+
+            Map<String, Object> exerciseData = new HashMap<>();
+
+            exerciseData.put("name", entry.name);
+            exerciseData.put("exerciseIndex", entry.exerciseIndex);
+            exerciseData.put("reps", getExerciseReps(entry));
+            exerciseData.put("sets", getExerciseSets(entry));
+
+            String key = weightKey(entry.name);
+
+            exerciseData.put(
+                    "weight",
+                    weightPreferences.getString(key, "--")
+            );
+
+            exerciseData.put(
+                    "weightUnit",
+                    weightPreferences.getString("unit_" + key, "KG")
+            );
+
+            exerciseData.put("completed", true);
+
+            exercises.add(exerciseData);
+        }
+
+        workoutData.put("exercises", exercises);
+
+        completedWorkoutsRef.child(sessionKey).setValue(workoutData)
+                .addOnSuccessListener(unused -> {
+                    weightPreferences.edit()
+                            .putBoolean("uploaded_" + sessionKey, true)
+                            .apply();
+
+                    Toast.makeText(
+                            MainActivity.this,
+                            "Workout saved to Firebase!",
+                            Toast.LENGTH_SHORT
+                    ).show();
+                })
+                .addOnFailureListener(error ->
+                        Toast.makeText(
+                                MainActivity.this,
+                                "Firebase save failed: "
+                                        + error.getMessage(),
+                                Toast.LENGTH_LONG
+                        ).show()
+                );
+    }
+
+    // =================================================
+    // WORKOUT MENU AND EDIT DIALOGS
     // =================================================
 
     private void showWorkoutMenu(View anchor) {
-
-        if (todayExercises.isEmpty()) {
-
+        if (todayExerciseEntries.isEmpty() || currentExercise < 0) {
             Toast.makeText(
                     this,
                     "There is no exercise to edit yet.",
                     Toast.LENGTH_SHORT
             ).show();
-
             return;
         }
 
-        PopupMenu popup = new PopupMenu(this, anchor);
+        PopupMenu popup = new PopupMenu(
+                new android.view.ContextThemeWrapper(
+                        this,
+                        androidx.appcompat.R.style.Theme_AppCompat
+                ),
+                anchor
+        );
 
         popup.getMenu().add("Edit Weight");
+        popup.getMenu().add("Edit Reps");
+        popup.getMenu().add("Reset Reps");
+        popup.getMenu().add("Reset Sets");
         popup.getMenu().add("Reset Weight");
 
         popup.setOnMenuItemClickListener(item -> {
-
             String selected = item.getTitle().toString();
 
-            if (selected.equals("Edit Weight")) {
+            ExerciseEntry entry =
+                    todayExerciseEntries.get(currentExercise);
 
+            if (selected.equals("Edit Weight")) {
                 showEditWeightDialog();
 
-            } else if (selected.equals("Reset Weight")) {
+            } else if (selected.equals("Edit Reps")) {
+                showEditRepsDialog();
 
-                String exercise =
-                        todayExercises.get(currentExercise);
+            } else if (selected.equals("Reset Reps")) {
+                weightPreferences.edit()
+                        .remove(exercisePreferenceKey("reps", entry))
+                        .apply();
+
+                updateWorkoutDisplay();
+
+                Toast.makeText(
+                        this,
+                        "Reps reset to zero.",
+                        Toast.LENGTH_SHORT
+                ).show();
+
+            } else if (selected.equals("Reset Sets")) {
+                weightPreferences.edit()
+                        .remove(exercisePreferenceKey("sets", entry))
+                        .apply();
+
+                updateWorkoutDisplay();
+
+                Toast.makeText(
+                        this,
+                        "Sets reset to zero.",
+                        Toast.LENGTH_SHORT
+                ).show();
+
+            } else if (selected.equals("Reset Weight")) {
+                String key = weightKey(entry.name);
 
                 weightPreferences.edit()
-                        .remove(weightKey(exercise))
+                        .remove(key)
+                        .remove("unit_" + key)
                         .apply();
 
                 updateWorkoutDisplay();
@@ -657,43 +957,73 @@ public class MainActivity extends AppCompatActivity
     }
 
     private void showEditWeightDialog() {
+        if (currentExercise < 0
+                || currentExercise >= todayExerciseEntries.size()) return;
 
-        String exercise = todayExercises.get(currentExercise);
+        String exercise =
+                todayExerciseEntries.get(currentExercise).name;
 
-        EditText input = new EditText(this);
+        String key = weightKey(exercise);
+
+        String currentWeight =
+                weightPreferences.getString(key, "");
+
+        String savedUnit =
+                weightPreferences.getString("unit_" + key, "KG");
+
+        String preferredUnit = getPreferredWeightUnit();
+
+        if (!currentWeight.isEmpty() && !currentWeight.equals("--")
+                && !savedUnit.equalsIgnoreCase(preferredUnit)) {
+
+            try {
+                double value = Double.parseDouble(currentWeight);
+
+                if (savedUnit.equalsIgnoreCase("KG")
+                        && preferredUnit.equalsIgnoreCase("LB")) {
+
+                    value *= KG_TO_LB;
+
+                } else if (savedUnit.equalsIgnoreCase("LB")
+                        && preferredUnit.equalsIgnoreCase("KG")) {
+
+                    value /= KG_TO_LB;
+                }
+
+                currentWeight = String.valueOf(Math.round(value));
+
+            } catch (NumberFormatException ignored) {
+            }
+        }
+
+        EditText input = createDialogInput(
+                "Enter weight in " + preferredUnit
+        );
 
         input.setInputType(
                 InputType.TYPE_CLASS_NUMBER
                         | InputType.TYPE_NUMBER_FLAG_DECIMAL
         );
 
-        input.setHint("Enter weight in kg");
-
-        String currentWeight = weightPreferences.getString(
-                weightKey(exercise),
-                ""
-        );
-
         input.setText(
                 currentWeight.equals("--") ? "" : currentWeight
         );
 
-        input.setSelectAllOnFocus(true);
-        input.setPadding(dp(16), dp(12), dp(16), dp(12));
-
-        new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(
+                new android.view.ContextThemeWrapper(
+                        this,
+                        androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert
+                )
+        )
                 .setTitle("Edit Weight")
                 .setMessage("Weight for " + exercise)
                 .setView(input)
                 .setNegativeButton("Cancel", null)
-                .setPositiveButton("Save", (dialog, which) -> {
-
-                    String value = input.getText()
-                            .toString()
-                            .trim();
+                .setPositiveButton("Save", (d, which) -> {
+                    String value =
+                            input.getText().toString().trim();
 
                     try {
-
                         double weight = Double.parseDouble(value);
 
                         if (weight < 0) {
@@ -701,13 +1031,13 @@ public class MainActivity extends AppCompatActivity
                         }
 
                         weightPreferences.edit()
-                                .putString(weightKey(exercise), value)
+                                .putString(key, value)
+                                .putString("unit_" + key, preferredUnit)
                                 .apply();
 
                         updateWorkoutDisplay();
 
                     } catch (NumberFormatException e) {
-
                         Toast.makeText(
                                 this,
                                 "Enter a valid weight.",
@@ -715,21 +1045,125 @@ public class MainActivity extends AppCompatActivity
                         ).show();
                     }
                 })
-                .show();
+                .create();
+
+        styleDarkDialog(dialog, input);
+        dialog.show();
+    }
+
+    private void showEditRepsDialog() {
+        if (currentExercise < 0
+                || currentExercise >= todayExerciseEntries.size()) return;
+
+        ExerciseEntry entry =
+                todayExerciseEntries.get(currentExercise);
+
+        EditText input = createDialogInput("Enter reps");
+
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+        input.setText(String.valueOf(getExerciseReps(entry)));
+
+        AlertDialog dialog = new AlertDialog.Builder(
+                new android.view.ContextThemeWrapper(
+                        this,
+                        androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert
+                )
+        )
+                .setTitle("Edit Reps")
+                .setMessage("Reps for " + entry.name)
+                .setView(input)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Save", (d, which) -> {
+                    try {
+                        int reps = Integer.parseInt(
+                                input.getText().toString().trim()
+                        );
+
+                        if (reps <= 0) {
+                            throw new NumberFormatException();
+                        }
+
+                        weightPreferences.edit()
+                                .putInt(
+                                        exercisePreferenceKey("reps", entry),
+                                        reps
+                                )
+                                .apply();
+
+                        updateWorkoutDisplay();
+
+                    } catch (NumberFormatException e) {
+                        Toast.makeText(
+                                this,
+                                "Enter a valid number of reps.",
+                                Toast.LENGTH_SHORT
+                        ).show();
+                    }
+                })
+                .create();
+
+        styleDarkDialog(dialog, input);
+        dialog.show();
+    }
+
+    private EditText createDialogInput(String hint) {
+        EditText input = new EditText(this);
+
+        input.setHint(hint);
+        input.setHintTextColor(MUTED);
+        input.setTextColor(Color.WHITE);
+        input.setSelectAllOnFocus(true);
+        input.setPadding(dp(16), dp(12), dp(16), dp(12));
+
+        return input;
+    }
+
+    private void styleDarkDialog(
+            AlertDialog dialog, EditText input) {
+
+        dialog.setOnShowListener(d -> {
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setBackgroundDrawable(
+                        makeBackground(CARD_COLOR, 16)
+                );
+            }
+
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                    .setTextColor(Color.WHITE);
+
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+                    .setTextColor(Color.WHITE);
+
+            TextView message =
+                    dialog.findViewById(android.R.id.message);
+
+            if (message != null) {
+                message.setTextColor(Color.rgb(200, 205, 215));
+            }
+
+            input.setTextColor(Color.WHITE);
+            input.setHintTextColor(MUTED);
+        });
+    }
+
+    private String getPreferredWeightUnit() {
+        SharedPreferences settings = getSharedPreferences(
+                "UserSettings", MODE_PRIVATE
+        );
+
+        return settings.getString("weightUnit", "KG");
     }
 
     private String weightKey(String exercise) {
-
         return "weight_" + exercise.toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9]", "_");
     }
 
     // =================================================
-    // WEEKLY ACTIVITY + UPCOMING ROUTINE ROW
+    // WEEKLY ACTIVITY AND UPCOMING ROUTINE
     // =================================================
 
     private void addWeeklyAndUpcomingRow() {
-
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.TOP);
@@ -772,21 +1206,10 @@ public class MainActivity extends AppCompatActivity
         dashboardContainer.addView(row);
     }
 
-    // =================================================
-    // WEEKLY ACTIVITY
-    // =================================================
-
     private void addWeeklyActivityContent(LinearLayout card) {
-
         LinearLayout titleRow = new LinearLayout(this);
         titleRow.setOrientation(LinearLayout.HORIZONTAL);
         titleRow.setGravity(WEEKLY_PLACEMENT);
-
-        titleRow.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        ));
-
         titleRow.setPadding(0, 0, 0, dp(8));
 
         addTitleIcon(
@@ -801,29 +1224,16 @@ public class MainActivity extends AppCompatActivity
                 WEEKLY_BOTTOM
         );
 
-        TextView title = createText(
-                "Weekly Activity",
-                15,
-                WHITE,
-                true
-        );
-
-        titleRow.addView(title);
+        titleRow.addView(createText(
+                "Weekly Activity", 15, WHITE, true
+        ));
 
         card.addView(titleRow);
 
-        weeklyNumber = createText(
-                "0",
-                29,
-                WHITE,
-                true
-        );
+        weeklyNumber = createText("0", 29, WHITE, true);
 
         weeklyDescription = createText(
-                "Scheduled workouts",
-                12,
-                MUTED,
-                false
+                "Scheduled workouts", 12, MUTED, false
         );
 
         card.addView(weeklyNumber);
@@ -831,17 +1241,15 @@ public class MainActivity extends AppCompatActivity
 
         updateWeeklyActivity();
 
-        card.setOnClickListener(v ->
-                openActivity(Option3Activity.class)
+        card.setOnClickListener(
+                v -> openActivity(Option3Activity.class)
         );
     }
 
     private void updateWeeklyActivity() {
-
         Calendar calendar = Calendar.getInstance();
 
         int today = calendar.get(Calendar.DAY_OF_WEEK);
-
         int daysSinceMonday = (today + 5) % 7;
 
         calendar.add(Calendar.DAY_OF_MONTH, -daysSinceMonday);
@@ -849,7 +1257,6 @@ public class MainActivity extends AppCompatActivity
         int totalSessions = 0;
 
         for (int i = 0; i < 7; i++) {
-
             String date = formatDate(calendar.getTimeInMillis());
 
             JSONArray sessions =
@@ -869,21 +1276,10 @@ public class MainActivity extends AppCompatActivity
         );
     }
 
-    // =================================================
-    // UPCOMING ROUTINE
-    // =================================================
-
     private void addUpcomingRoutineContent(LinearLayout card) {
-
         LinearLayout titleRow = new LinearLayout(this);
         titleRow.setOrientation(LinearLayout.HORIZONTAL);
         titleRow.setGravity(UPCOMING_PLACEMENT);
-
-        titleRow.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        ));
-
         titleRow.setPadding(0, 0, 0, dp(6));
 
         addTitleIcon(
@@ -898,34 +1294,24 @@ public class MainActivity extends AppCompatActivity
                 UPCOMING_BOTTOM
         );
 
-        TextView title = createText(
-                "Upcoming Routine",
-                15,
-                WHITE,
-                true
-        );
+        titleRow.addView(createText(
+                "Upcoming Routine", 15, WHITE, true
+        ));
 
-        titleRow.addView(title);
         card.addView(titleRow);
 
-        upcomingDescription = createText(
-                "",
-                12,
-                MUTED,
-                false
-        );
+        upcomingDescription = createText("", 12, MUTED, false);
 
         card.addView(upcomingDescription);
 
         updateUpcomingRoutine();
 
-        card.setOnClickListener(v ->
-                openActivity(Option3Activity.class)
+        card.setOnClickListener(
+                v -> openActivity(Option3Activity.class)
         );
     }
 
     private void updateUpcomingRoutine() {
-
         Calendar searchDate = Calendar.getInstance();
         Calendar now = Calendar.getInstance();
 
@@ -933,97 +1319,60 @@ public class MainActivity extends AppCompatActivity
         String nextDate = null;
 
         for (int day = 0; day <= 365; day++) {
-
             String date = formatDate(searchDate.getTimeInMillis());
 
             JSONArray sessions =
                     RoutineStorage.getSessionsForDate(this, date);
 
             for (int i = 0; i < sessions.length(); i++) {
-
                 JSONObject session = sessions.optJSONObject(i);
 
-                if (session == null) {
-                    continue;
-                }
+                if (session == null) continue;
 
-                String time = session.optString("time", "");
+                Calendar sessionDateTime = createSessionDateTime(
+                        date,
+                        session.optString("time", "")
+                );
 
-                Calendar sessionDateTime =
-                        createSessionDateTime(date, time);
+                if (sessionDateTime != null
+                        && sessionDateTime.after(now)) {
 
-                if (sessionDateTime == null) {
-                    continue;
-                }
-
-                if (sessionDateTime.after(now)) {
-
-                    if (nextSession == null) {
-
-                        nextSession = session;
-                        nextDate = date;
-
-                    } else {
-
-                        Calendar currentNext =
-                                createSessionDateTime(
-                                        nextDate,
-                                        nextSession.optString("time", "")
-                                );
-
-                        if (currentNext == null
-                                || sessionDateTime.before(currentNext)) {
-
-                            nextSession = session;
-                            nextDate = date;
-                        }
-                    }
+                    nextSession = session;
+                    nextDate = date;
+                    break;
                 }
             }
 
-            if (nextSession != null) {
-                break;
-            }
+            if (nextSession != null) break;
 
             searchDate.add(Calendar.DAY_OF_MONTH, 1);
         }
 
         if (nextSession == null) {
-
             upcomingDescription.setText(
                     "No upcoming workouts scheduled.\n"
                             + "Add a session in My Routine."
             );
-
             return;
         }
 
         JSONArray exercises =
                 nextSession.optJSONArray("exercises");
 
-        int exerciseCount =
-                exercises == null ? 0 : exercises.length();
-
-        String readableDate = formatReadableDate(nextDate);
-        String time = nextSession.optString("time", "");
+        int count = exercises == null ? 0 : exercises.length();
 
         upcomingDescription.setText(
-                readableDate
-                        + "\n" + time
-                        + "\n" + exerciseCount
-                        + (exerciseCount == 1
-                        ? " exercise"
-                        : " exercises")
+                formatReadableDate(nextDate)
+                        + "\n" + nextSession.optString("time", "")
+                        + "\n" + count
+                        + (count == 1 ? " exercise" : " exercises")
         );
     }
 
     private Calendar createSessionDateTime(
-            String date,
-            String time
-    ) {
+            String date, String time) {
 
         try {
-
             SimpleDateFormat dateFormat =
                     new SimpleDateFormat("yyyy-MM-dd", Locale.US);
 
@@ -1031,9 +1380,7 @@ public class MainActivity extends AppCompatActivity
 
             Date parsedDate = dateFormat.parse(date);
 
-            if (parsedDate == null) {
-                return null;
-            }
+            if (parsedDate == null) return null;
 
             SimpleDateFormat timeFormat =
                     new SimpleDateFormat("h:mm a", Locale.getDefault());
@@ -1043,24 +1390,16 @@ public class MainActivity extends AppCompatActivity
             Date parsedTime = timeFormat.parse(time);
 
             if (parsedTime == null) {
-
-                timeFormat = new SimpleDateFormat(
-                        "h:mm a",
-                        Locale.US
-                );
-
+                timeFormat = new SimpleDateFormat("h:mm a", Locale.US);
                 parsedTime = timeFormat.parse(time);
             }
 
-            if (parsedTime == null) {
-                return null;
-            }
+            if (parsedTime == null) return null;
 
             Calendar result = Calendar.getInstance();
-
             Calendar timeCalendar = Calendar.getInstance();
-            timeCalendar.setTime(parsedTime);
 
+            timeCalendar.setTime(parsedTime);
             result.setTime(parsedDate);
 
             result.set(Calendar.HOUR_OF_DAY,
@@ -1080,11 +1419,10 @@ public class MainActivity extends AppCompatActivity
     }
 
     // =================================================
-    // FULL-WIDTH PROGRESS WIDGET
+    // HOME PROGRESS CARD AND GRAPHS
     // =================================================
 
     private void addProgressWidget() {
-
         LinearLayout card = createCard();
 
         addProgressContent(card);
@@ -1093,17 +1431,14 @@ public class MainActivity extends AppCompatActivity
     }
 
     private void addProgressContent(LinearLayout card) {
-
         progressPage = 0;
 
         LinearLayout titleRow = new LinearLayout(this);
         titleRow.setOrientation(LinearLayout.HORIZONTAL);
-        titleRow.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
 
-        titleRow.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        ));
+        titleRow.setGravity(
+                Gravity.START | Gravity.CENTER_VERTICAL
+        );
 
         titleRow.setPadding(0, 0, 0, dp(8));
 
@@ -1119,254 +1454,886 @@ public class MainActivity extends AppCompatActivity
                 PROGRESS_BOTTOM
         );
 
-        TextView title = createText(
-                "Progress",
-                17,
-                WHITE,
-                true
-        );
+        titleRow.addView(createText("Progress", 17, WHITE, true));
 
-        titleRow.addView(title);
         card.addView(titleRow);
 
-        TextView graphHeading = createText(
-                "Completed Workouts",
-                14,
-                WHITE,
-                true
+        homeProgressHeading = createText(
+                "Completed Workouts", 14, WHITE, true
         );
 
-        graphHeading.setPadding(0, dp(12), 0, dp(8));
+        homeProgressHeading.setPadding(0, dp(12), 0, dp(8));
 
-        card.addView(graphHeading);
+        card.addView(homeProgressHeading);
 
-        ProgressGraphView graph = new ProgressGraphView(this);
+        homeProgressGraph = new ProgressGraphView(this);
 
         LinearLayout.LayoutParams graphParams =
                 new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
-                        dp(170)
+                        dp(185)
                 );
 
-        graph.setLayoutParams(graphParams);
+        homeProgressGraph.setLayoutParams(graphParams);
 
-        card.addView(graph);
+        card.addView(homeProgressGraph);
 
-        TextView swipeHint = createText(
-                "↑ Swipe for goals",
-                11,
-                MUTED,
-                true
+        homeProgressHint = createText(
+                "↑ Swipe for goals", 11, MUTED, true
         );
 
-        swipeHint.setGravity(Gravity.CENTER);
-        swipeHint.setPadding(0, dp(10), 0, 0);
+        homeProgressHint.setGravity(Gravity.CENTER);
+        homeProgressHint.setPadding(0, dp(10), 0, 0);
 
-        card.addView(swipeHint);
+        card.addView(homeProgressHint);
 
-        card.setOnClickListener(v ->
-                openActivity(Option2Activity.class)
+        card.setOnClickListener(
+                v -> openActivity(Option2Activity.class)
         );
 
-        graph.setOnTouchListener(new View.OnTouchListener() {
+        homeProgressGraph.setOnTouchListener(
+                new View.OnTouchListener() {
 
-            private float startX;
-            private float startY;
+                    private float startX;
+                    private float startY;
 
-            @Override
-            public boolean onTouch(View view, MotionEvent event) {
+                    @Override
+                    public boolean onTouch(View view, MotionEvent event) {
+                        switch (event.getAction()) {
 
-                switch (event.getAction()) {
+                            case MotionEvent.ACTION_DOWN:
+                                startX = event.getX();
+                                startY = event.getY();
 
-                    case MotionEvent.ACTION_DOWN:
+                                view.getParent()
+                                        .requestDisallowInterceptTouchEvent(true);
 
-                        startX = event.getX();
-                        startY = event.getY();
+                                return true;
 
-                        view.getParent()
-                                .requestDisallowInterceptTouchEvent(true);
+                            case MotionEvent.ACTION_MOVE:
+                                view.getParent()
+                                        .requestDisallowInterceptTouchEvent(true);
 
-                        return true;
+                                return true;
 
-                    case MotionEvent.ACTION_MOVE:
+                            case MotionEvent.ACTION_UP:
+                                float differenceY =
+                                        event.getY() - startY;
 
-                        view.getParent()
-                                .requestDisallowInterceptTouchEvent(true);
+                                float differenceX =
+                                        event.getX() - startX;
 
-                        return true;
+                                view.getParent()
+                                        .requestDisallowInterceptTouchEvent(false);
 
-                    case MotionEvent.ACTION_UP:
+                                if (Math.abs(differenceY) > dp(25)
+                                        && Math.abs(differenceY)
+                                        > Math.abs(differenceX)) {
 
-                        float differenceY = event.getY() - startY;
-                        float differenceX = event.getX() - startX;
+                                    progressPage =
+                                            differenceY < 0 ? 1 : 0;
 
-                        view.getParent()
-                                .requestDisallowInterceptTouchEvent(false);
+                                    updateHomeProgressPage();
 
-                        if (Math.abs(differenceY) > dp(25)
-                                && Math.abs(differenceY) > Math.abs(differenceX)) {
+                                } else if (Math.abs(differenceY) < dp(10)
+                                        && Math.abs(differenceX) < dp(10)) {
 
-                            if (differenceY < 0) {
-                                progressPage = 1;
-                            } else {
-                                progressPage = 0;
-                            }
+                                    card.performClick();
+                                }
 
-                            if (progressPage == 0) {
+                                return true;
 
-                                graphHeading.setText(
-                                        "Completed Workouts"
-                                );
+                            case MotionEvent.ACTION_CANCEL:
+                                view.getParent()
+                                        .requestDisallowInterceptTouchEvent(false);
 
-                                swipeHint.setText(
-                                        "↑ Swipe for goals"
-                                );
-
-                            } else {
-
-                                graphHeading.setText(
-                                        "Goal Progress"
-                                );
-
-                                swipeHint.setText(
-                                        "↓ Swipe for workouts"
-                                );
-                            }
-
-                            graph.setMode(progressPage);
-
-                        } else if (Math.abs(differenceY) < dp(10)
-                                && Math.abs(differenceX) < dp(10)) {
-
-                            card.performClick();
+                                return true;
                         }
 
                         return true;
+                    }
+                }
+        );
 
-                    case MotionEvent.ACTION_CANCEL:
+        loadHomeProgressData();
+    }
 
-                        view.getParent()
-                                .requestDisallowInterceptTouchEvent(false);
+    private void updateHomeProgressPage() {
+        if (progressPage == 0) {
+            homeProgressHeading.setText("Completed Workouts");
+            homeProgressHint.setText("↑ Swipe for goals");
+        } else {
+            homeProgressHeading.setText("Goal Progress");
+            homeProgressHint.setText("↓ Swipe for workouts");
+        }
 
-                        return true;
+        loadHomeProgressData();
+    }
+
+    private void loadHomeProgressData() {
+        if (homeProgressGraph == null) return;
+
+        completedWorkoutsRef.addListenerForSingleValueEvent(
+                new ValueEventListener() {
+
+                    @Override
+                    public void onDataChange(DataSnapshot snapshot) {
+                        ArrayList<HomeCompletedSession> sessions =
+                                new ArrayList<>();
+
+                        for (DataSnapshot sessionSnapshot
+                                : snapshot.getChildren()) {
+
+                            Boolean completed = sessionSnapshot
+                                    .child("completed")
+                                    .getValue(Boolean.class);
+
+                            if (completed != null && !completed) continue;
+
+                            String date = sessionSnapshot.child("date")
+                                    .getValue(String.class);
+
+                            if (date == null || date.trim().isEmpty()) {
+                                continue;
+                            }
+
+                            HomeCompletedSession session =
+                                    new HomeCompletedSession();
+
+                            session.date = date;
+
+                            for (DataSnapshot exerciseSnapshot
+                                    : sessionSnapshot.child("exercises")
+                                    .getChildren()) {
+
+                                HomeExerciseRecord exercise =
+                                        new HomeExerciseRecord();
+
+                                exercise.name = exerciseSnapshot
+                                        .child("name")
+                                        .getValue(String.class);
+
+                                exercise.reps = readHomeNumber(
+                                        exerciseSnapshot.child("reps")
+                                );
+
+                                Object weight = exerciseSnapshot
+                                        .child("weight").getValue();
+
+                                exercise.weight = weight == null
+                                        ? null : weight.toString();
+
+                                exercise.weightUnit = exerciseSnapshot
+                                        .child("weightUnit")
+                                        .getValue(String.class);
+
+                                if (exercise.name != null) {
+                                    session.exercises.add(exercise);
+                                }
+                            }
+
+                            sessions.add(session);
+                        }
+
+                        Collections.sort(
+                                sessions,
+                                Comparator.comparingLong(
+                                        s -> parseHomeDate(s.date)
+                                )
+                        );
+
+                        if (progressPage == 0) {
+                            showHomeWeeklyWorkoutGraph(sessions);
+                        } else {
+                            showHomeGoalGraph(sessions);
+                        }
+                    }
+
+                    @Override
+                    public void onCancelled(DatabaseError error) {
+                        homeProgressGraph.setMessage(
+                                "Could not load progress data."
+                        );
+                    }
+                }
+        );
+    }
+
+    private int readHomeNumber(DataSnapshot snapshot) {
+        Object value = snapshot.getValue();
+
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+
+        if (value != null) {
+            try {
+                return Integer.parseInt(value.toString());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+
+        return 0;
+    }
+
+    private long parseHomeDate(String date) {
+        try {
+            SimpleDateFormat format =
+                    new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+
+            Date parsed = format.parse(date);
+
+            return parsed == null ? 0 : parsed.getTime();
+
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private void showHomeWeeklyWorkoutGraph(
+            ArrayList<HomeCompletedSession> sessions) {
+
+        String[] labels = new String[7];
+        float[] values = new float[7];
+
+        Calendar weekStart = Calendar.getInstance();
+
+        weekStart.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY);
+        weekStart.set(Calendar.HOUR_OF_DAY, 0);
+        weekStart.set(Calendar.MINUTE, 0);
+        weekStart.set(Calendar.SECOND, 0);
+        weekStart.set(Calendar.MILLISECOND, 0);
+
+        weekStart.add(Calendar.WEEK_OF_YEAR, -6);
+
+        SimpleDateFormat labelFormat =
+                new SimpleDateFormat("MMM d", Locale.getDefault());
+
+        for (int i = 0; i < 7; i++) {
+            labels[i] = labelFormat.format(weekStart.getTime());
+
+            weekStart.add(Calendar.WEEK_OF_YEAR, 1);
+        }
+
+        Calendar firstWeek = Calendar.getInstance();
+
+        firstWeek.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY);
+        firstWeek.set(Calendar.HOUR_OF_DAY, 0);
+        firstWeek.set(Calendar.MINUTE, 0);
+        firstWeek.set(Calendar.SECOND, 0);
+        firstWeek.set(Calendar.MILLISECOND, 0);
+
+        firstWeek.add(Calendar.WEEK_OF_YEAR, -6);
+
+        long firstWeekMillis = firstWeek.getTimeInMillis();
+
+        for (HomeCompletedSession session : sessions) {
+            long sessionMillis = parseHomeDate(session.date);
+
+            if (sessionMillis < firstWeekMillis) continue;
+
+            Calendar sessionCalendar = Calendar.getInstance();
+
+            sessionCalendar.setTimeInMillis(sessionMillis);
+            sessionCalendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY);
+            sessionCalendar.set(Calendar.HOUR_OF_DAY, 0);
+            sessionCalendar.set(Calendar.MINUTE, 0);
+            sessionCalendar.set(Calendar.SECOND, 0);
+            sessionCalendar.set(Calendar.MILLISECOND, 0);
+
+            long difference = sessionCalendar.getTimeInMillis()
+                    - firstWeekMillis;
+
+            int index = (int) (difference
+                    / (7L * 24L * 60L * 60L * 1000L));
+
+            if (index >= 0 && index < 7) {
+                values[index]++;
+            }
+        }
+
+        homeProgressGraph.setData(
+                labels, values, 0, true, "Workouts", false
+        );
+    }
+
+    private void showHomeGoalGraph(
+            ArrayList<HomeCompletedSession> sessions) {
+
+        SharedPreferences goalPreferences = getSharedPreferences(
+                PREF_GOALS, MODE_PRIVATE
+        );
+
+        String selectedWorkout = goalPreferences.getString(
+                KEY_HOME_WORKOUT, ""
+        );
+
+        int goalType = goalPreferences.getInt(
+                KEY_HOME_GOAL_TYPE, 0
+        );
+
+        if (selectedWorkout == null
+                || selectedWorkout.trim().isEmpty()) {
+
+            homeProgressGraph.setMessage(
+                    "Select a workout in Progress to see its goal."
+            );
+
+            return;
+        }
+
+        String workoutKey = selectedWorkout.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]", "_");
+
+        String goalKey = workoutKey
+                + (goalType == 0 ? "_reps" : "_weight");
+
+        float target = goalPreferences.getFloat(goalKey, 0);
+
+        if (target <= 0) {
+            homeProgressGraph.setMessage(
+                    "Set a goal for " + selectedWorkout
+                            + " in the Progress section."
+            );
+
+            return;
+        }
+
+        ArrayList<String> labels = new ArrayList<>();
+        ArrayList<Float> values = new ArrayList<>();
+
+        for (HomeCompletedSession session : sessions) {
+            for (HomeExerciseRecord exercise : session.exercises) {
+
+                if (exercise.name == null
+                        || !exercise.name.equalsIgnoreCase(selectedWorkout)) {
+                    continue;
                 }
 
-                return true;
+                if (goalType == 0) {
+                    if (exercise.reps <= 0) continue;
+
+                    values.add((float) exercise.reps);
+
+                } else {
+                    Float weight = parseHomeWeightKg(
+                            exercise.weight,
+                            exercise.weightUnit
+                    );
+
+                    if (weight == null) continue;
+
+                    values.add(weight);
+                }
+
+                labels.add(shortHomeDate(session.date));
             }
-        });
+        }
+
+        String unit = goalType == 0 ? "Reps" : "kg";
+
+        if (values.isEmpty()) {
+            homeProgressGraph.setMessage(
+                    "No completed history found for "
+                            + selectedWorkout + "."
+            );
+
+            return;
+        }
+
+        homeProgressGraph.setData(
+                labels.toArray(new String[0]),
+                toHomeFloatArray(values),
+                target,
+                false,
+                unit,
+                true
+        );
+    }
+
+    private Float parseHomeWeightKg(String text, String unit) {
+        if (text == null || text.trim().isEmpty()
+                || text.equals("--")) {
+            return null;
+        }
+
+        try {
+            float value = Float.parseFloat(
+                    text.replace(",", ".").trim()
+            );
+
+            if (value <= 0) return null;
+
+            if (unit != null && (unit.equalsIgnoreCase("LB")
+                    || unit.equalsIgnoreCase("LBS"))) {
+
+                value *= 0.45359237f;
+            }
+
+            return value;
+
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private String shortHomeDate(String date) {
+        try {
+            SimpleDateFormat input =
+                    new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+
+            SimpleDateFormat output =
+                    new SimpleDateFormat("MM/dd", Locale.US);
+
+            Date parsed = input.parse(date);
+
+            return parsed == null ? date : output.format(parsed);
+
+        } catch (Exception e) {
+            return date;
+        }
+    }
+
+    private float[] toHomeFloatArray(ArrayList<Float> values) {
+        float[] result = new float[values.size()];
+
+        for (int i = 0; i < values.size(); i++) {
+            result[i] = values.get(i);
+        }
+
+        return result;
     }
 
     // =================================================
-    // PROGRESS GRAPH
+    // HOME GRAPH VIEW
     // =================================================
 
     private class ProgressGraphView extends View {
 
-        private int mode = 0;
+        private final Paint paint =
+                new Paint(Paint.ANTI_ALIAS_FLAG);
 
-        private final Paint paint = new Paint(
-                Paint.ANTI_ALIAS_FLAG
-        );
+        private String[] labels = new String[0];
+        private float[] values = new float[0];
 
-        public ProgressGraphView(
-                android.content.Context context
-        ) {
+        private float target = 0;
+
+        private boolean barChart = false;
+        private boolean showTarget = false;
+
+        private String unit = "";
+        private String message = "";
+
+        private final int GRAPH_COLOR =
+                Color.rgb(240, 107, 120);
+
+        private final int GOAL_COLOR =
+                Color.rgb(255, 193, 7);
+
+        private final int GRID_COLOR =
+                Color.rgb(65, 70, 80);
+
+        private static final int GRID_INTERVALS = 4;
+
+        ProgressGraphView(android.content.Context context) {
             super(context);
-            setClickable(true);
+
+            setLayerType(View.LAYER_TYPE_SOFTWARE, null);
         }
 
-        public void setMode(int newMode) {
-            mode = newMode;
+        void setData(
+                String[] labels,
+                float[] values,
+                float target,
+                boolean barChart,
+                String unit,
+                boolean showTarget) {
+
+            this.labels = labels == null
+                    ? new String[0] : labels;
+
+            this.values = values == null
+                    ? new float[0] : values;
+
+            this.target = target;
+            this.barChart = barChart;
+
+            this.unit = unit == null ? "" : unit;
+
+            this.showTarget = showTarget;
+            this.message = "";
+
             invalidate();
+        }
+
+        void setMessage(String message) {
+            this.message = message == null ? "" : message;
+
+            this.labels = new String[0];
+            this.values = new float[0];
+
+            invalidate();
+        }
+
+        private float calculateAxisMaximum(float rawMax) {
+            if (barChart) {
+                return Math.max(
+                        4f,
+                        (float) Math.ceil(rawMax / 4f) * 4f
+                );
+            }
+
+            if (rawMax <= 0) return 1f;
+
+            double magnitude = Math.pow(
+                    10,
+                    Math.floor(Math.log10(rawMax))
+            );
+
+            double normalized = rawMax / magnitude;
+            double niceNumber;
+
+            if (normalized <= 1) {
+                niceNumber = 1;
+            } else if (normalized <= 2) {
+                niceNumber = 2;
+            } else if (normalized <= 2.5) {
+                niceNumber = 2.5;
+            } else if (normalized <= 5) {
+                niceNumber = 5;
+            } else {
+                niceNumber = 10;
+            }
+
+            return (float) (niceNumber * magnitude);
+        }
+
+        private float getBarCenter(
+                int index, float left, float chartWidth) {
+
+            float slot = chartWidth / values.length;
+
+            return left + slot * index + slot / 2f;
+        }
+
+        private float getLineX(
+                int index, float left, float right) {
+
+            if (values.length == 1) {
+                return (left + right) / 2f;
+            }
+
+            float slot = (right - left) / (values.length - 1);
+
+            return left + slot * index;
         }
 
         @Override
         protected void onDraw(Canvas canvas) {
-
             super.onDraw(canvas);
 
             float width = getWidth();
             float height = getHeight();
 
-            float left = dp(28);
-            float right = width - dp(12);
-            float top = dp(12);
-            float bottom = height - dp(25);
-
-            // Horizontal guide lines.
-            paint.setColor(Color.rgb(65, 70, 80));
-            paint.setStrokeWidth(dp(1));
-            paint.setStyle(Paint.Style.STROKE);
-
-            for (int i = 0; i < 4; i++) {
-
-                float y = top + (bottom - top) * i / 3f;
-
-                canvas.drawLine(
-                        left,
-                        y,
-                        right,
-                        y,
-                        paint
+            if (!message.isEmpty()) {
+                drawCenteredMessage(
+                        canvas, message, width, height
                 );
+                return;
             }
 
-            // Graph axes.
-            paint.setColor(MUTED);
+            if (values.length == 0) {
+                drawCenteredMessage(
+                        canvas,
+                        "No workout data yet",
+                        width,
+                        height
+                );
+                return;
+            }
+
+            float left = dp(42);
+            float right = width - dp(14);
+            float top = dp(20);
+            float bottom = height - dp(38);
+
+            float chartWidth = right - left;
+            float chartHeight = bottom - top;
+
+            if (chartWidth <= 0 || chartHeight <= 0) return;
+
+            float rawMax = 0;
+
+            for (float value : values) {
+                rawMax = Math.max(rawMax, value);
+            }
+
+            if (showTarget) {
+                rawMax = Math.max(rawMax, target);
+            }
+
+            float axisMax = calculateAxisMaximum(rawMax);
+
+            drawGridAndYAxis(
+                    canvas,
+                    left,
+                    right,
+                    top,
+                    bottom,
+                    chartHeight,
+                    axisMax
+            );
+
+            paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(dp(1));
+            paint.setColor(MUTED);
 
             canvas.drawLine(left, top, left, bottom, paint);
             canvas.drawLine(left, bottom, right, bottom, paint);
 
-            // Labels.
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(MUTED);
-            paint.setTextSize(dp(10));
-            paint.setTextAlign(Paint.Align.CENTER);
-
-            if (mode == 0) {
-
-                String[] days = {
-                        "MON", "TUE", "WED", "THU",
-                        "FRI", "SAT", "SUN"
-                };
-
-                for (int i = 0; i < days.length; i++) {
-
-                    float x = left +
-                            (right - left) * i / 6f;
-
-                    canvas.drawText(
-                            days[i],
-                            x,
-                            height - dp(5),
-                            paint
-                    );
-                }
-
-            } else {
-
-                canvas.drawText(
-                        "GOALS",
-                        (left + right) / 2f,
-                        height - dp(5),
-                        paint
+            if (showTarget && target > 0) {
+                drawTargetLine(
+                        canvas,
+                        left,
+                        right,
+                        top,
+                        bottom,
+                        chartHeight,
+                        axisMax
                 );
             }
 
-            // Graph placeholder.
-            paint.setColor(MUTED);
-            paint.setTextSize(dp(11));
-            paint.setTextAlign(Paint.Align.CENTER);
+            if (barChart) {
+                drawBars(
+                        canvas,
+                        left,
+                        right,
+                        bottom,
+                        chartWidth,
+                        chartHeight,
+                        axisMax,
+                        height
+                );
+            } else {
+                drawLineGraph(
+                        canvas,
+                        left,
+                        right,
+                        bottom,
+                        chartHeight,
+                        axisMax,
+                        height
+                );
+            }
+        }
 
-            String message = mode == 0
-                    ? "No workout data yet"
-                    : "Goal data coming soon";
+        private void drawCenteredMessage(
+                Canvas canvas,
+                String text,
+                float width,
+                float height) {
+
+            paint.setColor(MUTED);
+            paint.setTextSize(dp(12));
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setStyle(Paint.Style.FILL);
 
             canvas.drawText(
-                    message,
-                    (left + right) / 2f,
-                    (top + bottom) / 2f + dp(4),
+                    text,
+                    width / 2f,
+                    height / 2f,
+                    paint
+            );
+        }
+
+        private void drawGridAndYAxis(
+                Canvas canvas,
+                float left,
+                float right,
+                float top,
+                float bottom,
+                float chartHeight,
+                float axisMax) {
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(dp(1));
+            paint.setColor(GRID_COLOR);
+
+            for (int i = 0; i <= GRID_INTERVALS; i++) {
+                float y = top
+                        + chartHeight * i / GRID_INTERVALS;
+
+                canvas.drawLine(left, y, right, y, paint);
+            }
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(MUTED);
+            paint.setTextSize(dp(9));
+            paint.setTextAlign(Paint.Align.RIGHT);
+
+            for (int i = 0; i <= GRID_INTERVALS; i++) {
+                float value = axisMax
+                        - axisMax * i / GRID_INTERVALS;
+
+                float y = top
+                        + chartHeight * i / GRID_INTERVALS;
+
+                String label;
+
+                if (barChart) {
+                    label = String.valueOf(Math.round(value));
+                } else {
+                    label = String.format(
+                            Locale.US, "%.1f", value
+                    );
+                }
+
+                canvas.drawText(
+                        label,
+                        left - dp(7),
+                        y + dp(3),
+                        paint
+                );
+            }
+        }
+
+        private void drawTargetLine(
+                Canvas canvas,
+                float left,
+                float right,
+                float top,
+                float bottom,
+                float chartHeight,
+                float axisMax) {
+
+            float targetY = bottom
+                    - (target / axisMax) * chartHeight;
+
+            paint.setColor(GOAL_COLOR);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(dp(2));
+
+            paint.setPathEffect(
+                    new DashPathEffect(
+                            new float[]{dp(6), dp(4)}, 0
+                    )
+            );
+
+            canvas.drawLine(
+                    left, targetY, right, targetY, paint
+            );
+
+            paint.setPathEffect(null);
+        }
+
+        private void drawBars(
+                Canvas canvas,
+                float left,
+                float right,
+                float bottom,
+                float chartWidth,
+                float chartHeight,
+                float axisMax,
+                float height) {
+
+            float slot = chartWidth / values.length;
+
+            float barWidth = Math.min(
+                    dp(22), slot * 0.55f
+            );
+
+            for (int i = 0; i < values.length; i++) {
+                float x = getBarCenter(
+                        i, left, chartWidth
+                );
+
+                float barHeight =
+                        (values[i] / axisMax) * chartHeight;
+
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(GRAPH_COLOR);
+
+                canvas.drawRoundRect(
+                        x - barWidth / 2f,
+                        bottom - barHeight,
+                        x + barWidth / 2f,
+                        bottom,
+                        dp(4),
+                        dp(4),
+                        paint
+                );
+
+                drawXLabel(canvas, labels[i], x, height);
+            }
+        }
+
+        private void drawLineGraph(
+                Canvas canvas,
+                float left,
+                float right,
+                float bottom,
+                float chartHeight,
+                float axisMax,
+                float height) {
+
+            Path path = new Path();
+
+            for (int i = 0; i < values.length; i++) {
+                float x = getLineX(i, left, right);
+
+                float y = bottom
+                        - (values[i] / axisMax) * chartHeight;
+
+                if (i == 0) {
+                    path.moveTo(x, y);
+                } else {
+                    path.lineTo(x, y);
+                }
+            }
+
+            paint.setColor(GRAPH_COLOR);
+            paint.setStrokeWidth(dp(2.5f));
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setPathEffect(null);
+
+            canvas.drawPath(path, paint);
+
+            for (int i = 0; i < values.length; i++) {
+                float x = getLineX(i, left, right);
+
+                float y = bottom
+                        - (values[i] / axisMax) * chartHeight;
+
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(GRAPH_COLOR);
+
+                canvas.drawCircle(x, y, dp(4), paint);
+
+                if (values.length <= 8
+                        || i == 0
+                        || i == values.length - 1
+                        || i % Math.max(1, values.length / 5) == 0) {
+
+                    drawXLabel(canvas, labels[i], x, height);
+                }
+            }
+        }
+
+        private void drawXLabel(
+                Canvas canvas,
+                String label,
+                float x,
+                float height) {
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(MUTED);
+            paint.setTextSize(dp(8));
+            paint.setTextAlign(Paint.Align.CENTER);
+
+            canvas.drawText(
+                    label,
+                    x,
+                    height - dp(8),
                     paint
             );
         }
@@ -1377,7 +2344,6 @@ public class MainActivity extends AppCompatActivity
     // =================================================
 
     private void addHeartRateWidget() {
-
         LinearLayout card = createCard();
 
         LinearLayout top = new LinearLayout(this);
@@ -1386,29 +2352,19 @@ public class MainActivity extends AppCompatActivity
         top.setPadding(0, dp(5), 0, dp(10));
 
         TextView title = createText(
-                "Heart Rate Monitor",
-                16,
-                WHITE,
-                true
+                "Heart Rate Monitor", 16, WHITE, true
         );
 
-        top.addView(
-                title,
-                new LinearLayout.LayoutParams(
-                        0,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        1
-                )
-        );
+        top.addView(title, new LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1
+        ));
 
-        TextView status = createText(
-                "COMING SOON",
-                10,
-                MUTED,
-                true
-        );
+        top.addView(createText(
+                "COMING SOON", 10, MUTED, true
+        ));
 
-        top.addView(status);
         card.addView(top);
 
         LinearLayout heartRateRow = new LinearLayout(this);
@@ -1417,6 +2373,7 @@ public class MainActivity extends AppCompatActivity
         heartRateRow.setPadding(0, dp(8), 0, dp(8));
 
         ImageView heartImage = new ImageView(this);
+
         heartImage.setImageResource(R.drawable.img_heart_rate);
 
         LinearLayout.LayoutParams heartParams =
@@ -1434,15 +2391,12 @@ public class MainActivity extends AppCompatActivity
         heartRateRow.addView(heartImage);
 
         TextView heart = createText(
-                "-- BPM",
-                29,
-                Color.rgb(240, 107, 120),
-                true
+                "-- BPM", 29, Color.rgb(240, 107, 120), true
         );
 
         heart.setGravity(Gravity.CENTER_VERTICAL);
-        heartRateRow.addView(heart);
 
+        heartRateRow.addView(heart);
         card.addView(heartRateRow);
 
         TextView description = createText(
@@ -1457,15 +2411,15 @@ public class MainActivity extends AppCompatActivity
 
         card.addView(description);
 
-        card.setOnClickListener(v ->
-                openActivity(HeartRateActivity.class)
+        card.setOnClickListener(
+                v -> openActivity(HeartRateActivity.class)
         );
 
         dashboardContainer.addView(card);
     }
 
     // =================================================
-    // ICON HELPER
+    // DESIGN HELPERS
     // =================================================
 
     private void addTitleIcon(
@@ -1477,8 +2431,7 @@ public class MainActivity extends AppCompatActivity
             int left,
             int top,
             int right,
-            int bottom
-    ) {
+            int bottom) {
 
         ImageView image = new ImageView(this);
 
@@ -1503,27 +2456,16 @@ public class MainActivity extends AppCompatActivity
         parent.addView(image);
     }
 
-    // =================================================
-    // DESIGN HELPERS
-    // =================================================
-
     private LinearLayout createCard() {
-
         LinearLayout card = new LinearLayout(this);
 
         card.setOrientation(LinearLayout.VERTICAL);
 
         card.setPadding(
-                dp(16),
-                dp(15),
-                dp(16),
-                dp(16)
+                dp(16), dp(15), dp(16), dp(16)
         );
 
-        card.setBackground(makeBackground(
-                CARD_COLOR,
-                18
-        ));
+        card.setBackground(makeBackground(CARD_COLOR, 18));
 
         LinearLayout.LayoutParams params =
                 new LinearLayout.LayoutParams(
@@ -1534,7 +2476,6 @@ public class MainActivity extends AppCompatActivity
         params.setMargins(0, 0, 0, dp(14));
 
         card.setLayoutParams(params);
-
         card.setClickable(true);
         card.setFocusable(true);
 
@@ -1545,8 +2486,7 @@ public class MainActivity extends AppCompatActivity
             String value,
             int size,
             int color,
-            boolean bold
-    ) {
+            boolean bold) {
 
         TextView text = new TextView(this);
 
@@ -1562,7 +2502,6 @@ public class MainActivity extends AppCompatActivity
     }
 
     private Button createArrowButton(String symbol) {
-
         Button button = createSmallButton(symbol);
 
         button.setTextSize(32);
@@ -1572,7 +2511,6 @@ public class MainActivity extends AppCompatActivity
     }
 
     private Button createSmallButton(String symbol) {
-
         Button button = new Button(this);
 
         button.setText(symbol);
@@ -1587,10 +2525,32 @@ public class MainActivity extends AppCompatActivity
         return button;
     }
 
+    private Button createSquareActionButton(String symbol) {
+        Button button = new Button(this);
+
+        button.setText(symbol);
+        button.setTextSize(17);
+        button.setTextColor(Color.WHITE);
+        button.setAllCaps(false);
+        button.setGravity(Gravity.CENTER);
+
+        button.setPadding(0, 0, 0, 0);
+
+        button.setMinWidth(0);
+        button.setMinimumWidth(0);
+
+        button.setMinHeight(0);
+        button.setMinimumHeight(0);
+
+        button.setBackground(
+                makeBackground(Color.rgb(55, 62, 75), 9)
+        );
+
+        return button;
+    }
+
     private GradientDrawable makeBackground(
-            int color,
-            int radius
-    ) {
+            int color, int radius) {
 
         GradientDrawable background = new GradientDrawable();
 
@@ -1601,20 +2561,14 @@ public class MainActivity extends AppCompatActivity
     }
 
     private int dp(int value) {
-
         return (int) (
-                value *
-                        getResources().getDisplayMetrics().density
-                        + 0.5f
+                value * getResources().getDisplayMetrics().density + 0.5f
         );
     }
 
     private int dp(float value) {
-
         return (int) (
-                value *
-                        getResources().getDisplayMetrics().density
-                        + 0.5f
+                value * getResources().getDisplayMetrics().density + 0.5f
         );
     }
 
@@ -1623,7 +2577,6 @@ public class MainActivity extends AppCompatActivity
     // =================================================
 
     private String formatDate(long milliseconds) {
-
         return new SimpleDateFormat(
                 "yyyy-MM-dd",
                 Locale.US
@@ -1631,9 +2584,7 @@ public class MainActivity extends AppCompatActivity
     }
 
     private String formatReadableDate(String date) {
-
         try {
-
             SimpleDateFormat input =
                     new SimpleDateFormat("yyyy-MM-dd", Locale.US);
 
@@ -1657,7 +2608,87 @@ public class MainActivity extends AppCompatActivity
     }
 
     // =================================================
-    // REFRESH DASHBOARD
+    // ESP32 BLUETOOTH CALLBACKS
+    // =================================================
+
+    @Override
+    public void onSample(BLEManager.SensorSample sample) {
+
+        // Send incoming sensor data to the processing class.
+        sensorProcess.processSample(sample);
+
+        // Calculate orientation every 100 samples.
+        if (sample.sequence % 100 == 0) {
+
+            double qw = sample.qw;
+            double qx = sample.qx;
+            double qy = sample.qy;
+            double qz = sample.qz;
+
+            double roll = Math.toDegrees(Math.atan2(
+                    2 * (qw * qx + qy * qz),
+                    1 - 2 * (qx * qx + qy * qy)
+            ));
+
+            double pitch = Math.toDegrees(Math.asin(
+                    Math.max(
+                            -1,
+                            Math.min(1, 2 * (qw * qy - qz * qx))
+                    )
+            ));
+
+            // Roll and pitch are calculated here.
+            // These values can later be used for workout tracking.
+
+            // android.util.Log.d(
+            //         "BarbellBLE",
+            //         "Roll: " + roll + " | Pitch: " + pitch
+            // );
+        }
+    }
+
+    @Override
+    public void onStatus(String message) {
+        android.util.Log.d("BarbellBLE", message);
+    }
+
+    @Override
+    public void onError(String message) {
+        android.util.Log.e("BarbellBLE", message);
+    }
+
+    // =================================================
+    // ESP32 BLUETOOTH PERMISSIONS AND CONNECTION
+    // =================================================
+
+    private void connectToTracker() {
+
+        if (bleManager == null) return;
+
+        if (bleManager.hasPermissions()) {
+            bleManager.scanAndConnect();
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+
+            // Android 12 and newer.
+            permissionLauncher.launch(new String[]{
+                    Manifest.permission.BLUETOOTH_SCAN,
+                    Manifest.permission.BLUETOOTH_CONNECT
+            });
+
+        } else {
+
+            // Android 11 and older.
+            permissionLauncher.launch(new String[]{
+                    Manifest.permission.ACCESS_FINE_LOCATION
+            });
+        }
+    }
+
+    // =================================================
+    // REFRESH DASHBOARD WHEN RETURNING
     // =================================================
 
     @Override
@@ -1666,61 +2697,6 @@ public class MainActivity extends AppCompatActivity
 
         if (dashboardContainer != null) {
             buildDashboard();
-        }
-    }
-
-    // =================================================
-    // BLE SENSOR STREAM
-    // =================================================
-
-    @Override
-    public void onSample(BLEManager.SensorSample sample) {
-
-        sensorProcess.processSample(sample);
-    }
-
-    @Override
-    public void onStatus(String message) {
-
-        android.util.Log.d(
-                "BarbellBLE",
-                message
-        );
-    }
-
-    @Override
-    public void onError(String message) {
-
-        android.util.Log.e(
-                "BarbellBLE",
-                message
-        );
-    }
-
-    // =================================================
-    // CONNECT TO ESP32 TRACKER
-    // =================================================
-
-    private void connectToTracker() {
-
-        if (bleManager.hasPermissions()) {
-
-            bleManager.scanAndConnect();
-            return;
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-
-            permissionLauncher.launch(new String[] {
-                    Manifest.permission.BLUETOOTH_SCAN,
-                    Manifest.permission.BLUETOOTH_CONNECT
-            });
-
-        } else {
-
-            permissionLauncher.launch(new String[] {
-                    Manifest.permission.ACCESS_FINE_LOCATION
-            });
         }
     }
 }

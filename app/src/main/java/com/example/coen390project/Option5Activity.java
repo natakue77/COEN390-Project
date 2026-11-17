@@ -4,18 +4,16 @@ package com.example.coen390project;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.view.MenuItem;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.RadioButton;
-import android.widget.Button;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.graphics.Insets;
 import androidx.core.view.GravityCompat;
@@ -34,8 +32,9 @@ public class Option5Activity extends AppCompatActivity
     private EditText ageEditText;
     private EditText weightEditText;
 
-    private RadioButton lightModeRadio;
-    private RadioButton darkModeRadio;
+    private RadioGroup weightUnitRadioGroup;
+    private RadioButton kgRadioButton;
+    private RadioButton lbRadioButton;
 
     private Button saveSettingsButton;
 
@@ -43,6 +42,8 @@ public class Option5Activity extends AppCompatActivity
 
     private DrawerLayout drawerLayout;
     private NavigationView navigationView;
+
+    private static final double KG_TO_LB = 2.2046226218;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,63 +57,54 @@ public class Option5Activity extends AppCompatActivity
 
         int originalTopPadding = mainContent.getPaddingTop();
 
-        ViewCompat.setOnApplyWindowInsetsListener(mainContent, (view, windowInsets) -> {
+        ViewCompat.setOnApplyWindowInsetsListener(
+                mainContent,
+                (view, windowInsets) -> {
 
-            Insets insets = windowInsets.getInsets(
-                    WindowInsetsCompat.Type.statusBars()
-                            | WindowInsetsCompat.Type.displayCutout()
-            );
+                    Insets insets = windowInsets.getInsets(
+                            WindowInsetsCompat.Type.statusBars()
+                                    | WindowInsetsCompat.Type.displayCutout()
+                    );
 
-            view.setPadding(
-                    view.getPaddingLeft(),
-                    originalTopPadding + insets.top,
-                    view.getPaddingRight(),
-                    view.getPaddingBottom()
-            );
+                    view.setPadding(
+                            view.getPaddingLeft(),
+                            originalTopPadding + insets.top,
+                            view.getPaddingRight(),
+                            view.getPaddingBottom()
+                    );
 
-            return windowInsets;
-        });
+                    return windowInsets;
+                }
+        );
 
         ViewCompat.requestApplyInsets(mainContent);
 
-        setupToolbar();
-        setupNavigation();
-
-        // Connect Java to XML
-        nameEditText = findViewById(R.id.nameEditText);
-        emailEditText = findViewById(R.id.emailEditText);
-        ageEditText = findViewById(R.id.ageEditText);
-        weightEditText = findViewById(R.id.weightEditText);
-
-        lightModeRadio = findViewById(R.id.lightModeRadio);
-        darkModeRadio = findViewById(R.id.darkModeRadio);
-
-        saveSettingsButton = findViewById(R.id.saveSettingsButton);
-
-        // Access saved settings
         preferences = getSharedPreferences(
                 "UserSettings",
                 MODE_PRIVATE
         );
 
-        // Load previously saved information
-        nameEditText.setText(preferences.getString("name", ""));
-        emailEditText.setText(preferences.getString("email", ""));
-        ageEditText.setText(preferences.getString("age", ""));
-        weightEditText.setText(preferences.getString("weight", ""));
+        nameEditText = findViewById(R.id.nameEditText);
+        emailEditText = findViewById(R.id.emailEditText);
+        ageEditText = findViewById(R.id.ageEditText);
+        weightEditText = findViewById(R.id.weightEditText);
 
-        // Load saved appearance
-        boolean darkMode = preferences.getBoolean("darkMode", false);
+        weightUnitRadioGroup = findViewById(R.id.weightUnitRadioGroup);
+        kgRadioButton = findViewById(R.id.kgRadioButton);
+        lbRadioButton = findViewById(R.id.lbRadioButton);
 
-        if (darkMode) {
-            darkModeRadio.setChecked(true);
-        } else {
-            lightModeRadio.setChecked(true);
-        }
+        saveSettingsButton = findViewById(R.id.saveSettingsButton);
 
-        // Save button
+        setupToolbar();
+        setupNavigation();
+        loadSettings();
+
         saveSettingsButton.setOnClickListener(v -> saveSettings());
     }
+
+    // =================================================
+    // TOOLBAR
+    // =================================================
 
     private void setupToolbar() {
 
@@ -120,21 +112,26 @@ public class Option5Activity extends AppCompatActivity
 
         setSupportActionBar(toolbar);
 
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setTitle("Settings");
-        }
+        TextView toolbarTitle = null;
 
-        // Align toolbar title with hamburger button
         for (int i = 0; i < toolbar.getChildCount(); i++) {
 
             View child = toolbar.getChildAt(i);
 
             if (child instanceof TextView) {
-                child.setTranslationY(
-                        -3 * getResources().getDisplayMetrics().density
-                );
+                toolbarTitle = (TextView) child;
                 break;
             }
+        }
+
+        if (toolbarTitle != null) {
+            toolbarTitle.setTranslationY(
+                    -3 * getResources().getDisplayMetrics().density
+            );
+        }
+
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setTitle("Settings");
         }
 
         drawerLayout = findViewById(R.id.drawerLayout);
@@ -152,32 +149,45 @@ public class Option5Activity extends AppCompatActivity
         toggle.syncState();
     }
 
+    // =================================================
+    // NAVIGATION
+    // =================================================
+
     private void setupNavigation() {
+
         navigationView.setNavigationItemSelectedListener(this);
         navigationView.setCheckedItem(R.id.nav_settings);
     }
 
     @Override
-    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+    public boolean onNavigationItemSelected(
+            android.view.MenuItem item
+    ) {
 
         int id = item.getItemId();
 
         if (id == R.id.nav_home) {
+
             startActivity(new Intent(this, MainActivity.class));
 
         } else if (id == R.id.nav_workouts) {
+
             startActivity(new Intent(this, Option1Activity.class));
 
         } else if (id == R.id.nav_progress) {
+
             startActivity(new Intent(this, Option2Activity.class));
 
         } else if (id == R.id.nav_routine) {
+
             startActivity(new Intent(this, Option3Activity.class));
 
         } else if (id == R.id.nav_tips) {
+
             startActivity(new Intent(this, Option4Activity.class));
 
         } else if (id == R.id.nav_settings) {
+
             drawerLayout.closeDrawer(GravityCompat.START);
             return true;
         }
@@ -186,6 +196,54 @@ public class Option5Activity extends AppCompatActivity
         return true;
     }
 
+    // =================================================
+    // LOAD SETTINGS
+    // =================================================
+
+    private void loadSettings() {
+
+        nameEditText.setText(
+                preferences.getString("name", "")
+        );
+
+        emailEditText.setText(
+                preferences.getString("email", "")
+        );
+
+        ageEditText.setText(
+                preferences.getString("age", "")
+        );
+
+        weightEditText.setText(
+                preferences.getString("weight", "")
+        );
+
+        String unit = preferences.getString("weightUnit", "KG");
+
+        if (unit.equalsIgnoreCase("LB")) {
+            lbRadioButton.setChecked(true);
+            weightEditText.setHint("Weight (lb)");
+        } else {
+            kgRadioButton.setChecked(true);
+            weightEditText.setHint("Weight (kg)");
+        }
+
+        weightUnitRadioGroup.setOnCheckedChangeListener(
+                (group, checkedId) -> {
+
+                    if (checkedId == R.id.kgRadioButton) {
+                        weightEditText.setHint("Weight (kg)");
+                    } else if (checkedId == R.id.lbRadioButton) {
+                        weightEditText.setHint("Weight (lb)");
+                    }
+                }
+        );
+    }
+
+    // =================================================
+    // SAVE SETTINGS
+    // =================================================
+
     private void saveSettings() {
 
         String name = nameEditText.getText().toString().trim();
@@ -193,32 +251,99 @@ public class Option5Activity extends AppCompatActivity
         String age = ageEditText.getText().toString().trim();
         String weight = weightEditText.getText().toString().trim();
 
-        boolean useDarkMode = darkModeRadio.isChecked();
+        String oldUnit = preferences.getString("weightUnit", "KG");
 
-        // Save information locally
+        String newUnit = lbRadioButton.isChecked() ? "LB" : "KG";
+
+        if (!weight.isEmpty()) {
+
+            try {
+
+                double parsedWeight = Double.parseDouble(weight);
+
+                if (parsedWeight <= 0) {
+                    throw new NumberFormatException();
+                }
+
+            } catch (NumberFormatException e) {
+
+                weightEditText.setError("Enter a valid weight");
+                weightEditText.requestFocus();
+                return;
+            }
+        }
+
+        /*
+         * Convert the profile body weight when the selected unit changes.
+         * Dashboard exercise weights are NOT converted or modified here.
+         */
+
+        if (!oldUnit.equalsIgnoreCase(newUnit) && !weight.isEmpty()) {
+
+            double value = Double.parseDouble(weight);
+
+            value = convertWeight(value, oldUnit, newUnit);
+
+            weight = formatWeight(value);
+
+            weightEditText.setText(weight);
+        }
+
         preferences.edit()
                 .putString("name", name)
                 .putString("email", email)
                 .putString("age", age)
                 .putString("weight", weight)
-                .putBoolean("darkMode", useDarkMode)
+                .putString("weightUnit", newUnit)
                 .apply();
+
+        weightEditText.setHint(
+                newUnit.equals("LB") ? "Weight (lb)" : "Weight (kg)"
+        );
 
         Toast.makeText(
                 this,
-                "Settings saved successfully",
+                "Settings saved successfully!",
                 Toast.LENGTH_SHORT
         ).show();
-
-        // Apply selected theme
-        int mode = useDarkMode
-                ? AppCompatDelegate.MODE_NIGHT_YES
-                : AppCompatDelegate.MODE_NIGHT_NO;
-
-        if (AppCompatDelegate.getDefaultNightMode() != mode) {
-            AppCompatDelegate.setDefaultNightMode(mode);
-        }
     }
+
+    // =================================================
+    // PROFILE WEIGHT CONVERSION
+    // =================================================
+
+    private double convertWeight(
+            double weight,
+            String oldUnit,
+            String newUnit
+    ) {
+
+        if (oldUnit.equalsIgnoreCase(newUnit)) {
+            return weight;
+        }
+
+        if (oldUnit.equalsIgnoreCase("KG")
+                && newUnit.equalsIgnoreCase("LB")) {
+
+            return weight * KG_TO_LB;
+        }
+
+        if (oldUnit.equalsIgnoreCase("LB")
+                && newUnit.equalsIgnoreCase("KG")) {
+
+            return weight / KG_TO_LB;
+        }
+
+        return weight;
+    }
+
+    private String formatWeight(double weight) {
+        return String.valueOf((long) Math.ceil(weight));
+    }
+
+    // =================================================
+    // BACK BUTTON
+    // =================================================
 
     @Override
     public void onBackPressed() {
@@ -229,6 +354,7 @@ public class Option5Activity extends AppCompatActivity
             drawerLayout.closeDrawer(GravityCompat.START);
 
         } else {
+
             super.onBackPressed();
         }
     }

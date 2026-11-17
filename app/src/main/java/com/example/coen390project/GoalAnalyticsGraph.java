@@ -1,4 +1,3 @@
-
 package com.example.coen390project;
 
 import android.content.Context;
@@ -45,13 +44,13 @@ public class GoalAnalyticsGraph extends View {
         float width = getWidth();
         float height = getHeight();
 
-        canvas.drawColor(Color.rgb(32, 35, 41));
+        canvas.drawColor(Color.WHITE);
 
         paint.setTextAlign(Paint.Align.CENTER);
 
         // No goal has been set yet
         if (targetGoal <= 0) {
-            paint.setColor(Color.WHITE);
+            paint.setColor(Color.GRAY);
             canvas.drawText(
                     "No goal data available",
                     width / 2,
@@ -96,7 +95,7 @@ public class GoalAnalyticsGraph extends View {
         );
 
         // Display percentage
-        paint.setColor(Color.WHITE);
+        paint.setColor(Color.BLACK);
 
         canvas.drawText(
                 String.format("%.0f%%", percentage),

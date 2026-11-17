@@ -29,8 +29,8 @@ public class Option1Activity extends AppCompatActivity {
 
     private static final int REQUEST_EXERCISES = 100;
     private static final int REQUEST_CUSTOM_WORKOUTS = 101;
+    private static final int REQUEST_PROGRESS_EXERCISE = 102;
 
-    // Body-part cards
     private LinearLayout cardAbs;
     private LinearLayout cardBack;
     private LinearLayout cardChest;
@@ -39,29 +39,25 @@ public class Option1Activity extends AppCompatActivity {
     private LinearLayout cardForearm;
     private LinearLayout cardBiceps;
     private LinearLayout cardTriceps;
-
-    // Custom workouts card
     private LinearLayout cardMyOwnWorkouts;
 
     private boolean routineSelectionMode;
+    private boolean progressSelectionMode;
 
     private final LinkedHashSet<String> selectedExercises =
             new LinkedHashSet<>();
 
     private DrawerLayout drawerLayout;
     private NavigationView navigationView;
-    private ActionBarDrawerToggle drawerToggle;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-
         setContentView(R.layout.activity_option1);
 
         View mainContent = findViewById(R.id.mainContent);
-
         int originalTopPadding = mainContent.getPaddingTop();
 
         ViewCompat.setOnApplyWindowInsetsListener(
@@ -91,17 +87,36 @@ public class Option1Activity extends AppCompatActivity {
                 false
         );
 
+        progressSelectionMode = getIntent().getBooleanExtra(
+                "PROGRESS_SELECTION_MODE",
+                false
+        );
+
+        // Restore previously selected exercises when editing
+        // the Progress graph selection.
+        ArrayList<String> existingSelections =
+                getIntent().getStringArrayListExtra("SELECTED_EXERCISES");
+
+        if (existingSelections != null) {
+            selectedExercises.addAll(existingSelections);
+        }
+
         Toolbar toolbar = findViewById(R.id.optionToolbar);
         setSupportActionBar(toolbar);
 
         if (getSupportActionBar() != null) {
-            getSupportActionBar().setTitle("Workouts");
+
+            if (progressSelectionMode) {
+                getSupportActionBar().setTitle("Select Workouts");
+            } else {
+                getSupportActionBar().setTitle("Workouts");
+            }
+
             getSupportActionBar().setDisplayHomeAsUpEnabled(false);
         }
 
         setupDrawer(toolbar);
 
-        // Align toolbar title with the hamburger button
         for (int i = 0; i < toolbar.getChildCount(); i++) {
             View child = toolbar.getChildAt(i);
 
@@ -113,7 +128,6 @@ public class Option1Activity extends AppCompatActivity {
             }
         }
 
-        // Connect all nine cards to their XML IDs
         cardAbs = findViewById(R.id.cardAbs);
         cardBack = findViewById(R.id.cardBack);
         cardChest = findViewById(R.id.cardChest);
@@ -125,7 +139,6 @@ public class Option1Activity extends AppCompatActivity {
 
         cardMyOwnWorkouts = findViewById(R.id.cardMyOwnWorkouts);
 
-        // Body-part card click listeners
         cardAbs.setOnClickListener(v ->
                 openExerciseList("Abdomen")
         );
@@ -158,11 +171,14 @@ public class Option1Activity extends AppCompatActivity {
                 openExerciseList("Triceps")
         );
 
-        // My Own Workouts
         cardMyOwnWorkouts.setOnClickListener(v ->
                 openMyOwnWorkouts()
         );
     }
+
+    // =================================================
+    // DRAWER
+    // =================================================
 
     private void setupDrawer(Toolbar toolbar) {
 
@@ -170,21 +186,16 @@ public class Option1Activity extends AppCompatActivity {
         navigationView = findViewById(R.id.navigationView);
 
         if (drawerLayout == null || navigationView == null) {
-            Toast.makeText(
-                    this,
-                    "Navigation drawer views are missing from activity_option1.xml",
-                    Toast.LENGTH_LONG
-            ).show();
             return;
         }
 
-        // Hide navigation while selecting exercises for a routine
-        if (routineSelectionMode) {
+        // Hide navigation during selection flows.
+        if (routineSelectionMode || progressSelectionMode) {
             navigationView.setVisibility(View.GONE);
             return;
         }
 
-        drawerToggle = new ActionBarDrawerToggle(
+        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
                 this,
                 drawerLayout,
                 toolbar,
@@ -192,8 +203,8 @@ public class Option1Activity extends AppCompatActivity {
                 R.string.drawer_close
         );
 
-        drawerLayout.addDrawerListener(drawerToggle);
-        drawerToggle.syncState();
+        drawerLayout.addDrawerListener(toggle);
+        toggle.syncState();
 
         navigationView.setCheckedItem(R.id.nav_workouts);
 
@@ -210,16 +221,12 @@ public class Option1Activity extends AppCompatActivity {
 
             if (id == R.id.nav_home) {
                 intent = new Intent(this, MainActivity.class);
-
             } else if (id == R.id.nav_progress) {
                 intent = new Intent(this, Option2Activity.class);
-
             } else if (id == R.id.nav_routine) {
                 intent = new Intent(this, Option3Activity.class);
-
             } else if (id == R.id.nav_tips) {
                 intent = new Intent(this, Option4Activity.class);
-
             } else if (id == R.id.nav_settings) {
                 intent = new Intent(this, Option5Activity.class);
             }
@@ -238,10 +245,15 @@ public class Option1Activity extends AppCompatActivity {
         });
     }
 
+    // =================================================
+    // DONE MENU
+    // =================================================
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
 
-        if (routineSelectionMode) {
+        // Done is available for both Routine and Progress selection.
+        if (routineSelectionMode || progressSelectionMode) {
             getMenuInflater().inflate(R.menu.workout_menu, menu);
         }
 
@@ -259,6 +271,10 @@ public class Option1Activity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
+    // =================================================
+    // OPEN EXERCISE CATEGORY
+    // =================================================
+
     private void openExerciseList(String category) {
 
         Intent intent = new Intent(
@@ -267,14 +283,49 @@ public class Option1Activity extends AppCompatActivity {
         );
 
         intent.putExtra("CATEGORY", category);
-        intent.putExtra("ROUTINE_SELECTION_MODE", routineSelectionMode);
+
+        intent.putExtra(
+                "ROUTINE_SELECTION_MODE",
+                routineSelectionMode
+        );
+
+        intent.putExtra(
+                "PROGRESS_SELECTION_MODE",
+                progressSelectionMode
+        );
+
+        // Pass current selections so the category screen can
+        // show previously selected exercises as checked.
+        if (progressSelectionMode) {
+            intent.putStringArrayListExtra(
+                    "SELECTED_EXERCISES",
+                    new ArrayList<>(selectedExercises)
+            );
+        }
 
         if (routineSelectionMode) {
-            startActivityForResult(intent, REQUEST_EXERCISES);
+
+            startActivityForResult(
+                    intent,
+                    REQUEST_EXERCISES
+            );
+
+        } else if (progressSelectionMode) {
+
+            startActivityForResult(
+                    intent,
+                    REQUEST_PROGRESS_EXERCISE
+            );
+
         } else {
+
             startActivity(intent);
         }
     }
+
+    // =================================================
+    // CUSTOM WORKOUTS
+    // =================================================
 
     private void openMyOwnWorkouts() {
 
@@ -283,14 +334,40 @@ public class Option1Activity extends AppCompatActivity {
                 MyOwnWorkouts.class
         );
 
-        intent.putExtra("ROUTINE_SELECTION_MODE", routineSelectionMode);
+        intent.putExtra(
+                "ROUTINE_SELECTION_MODE",
+                routineSelectionMode
+        );
+
+        intent.putExtra(
+                "PROGRESS_SELECTION_MODE",
+                progressSelectionMode
+        );
 
         if (routineSelectionMode) {
-            startActivityForResult(intent, REQUEST_CUSTOM_WORKOUTS);
+
+            startActivityForResult(
+                    intent,
+                    REQUEST_CUSTOM_WORKOUTS
+            );
+
+        } else if (progressSelectionMode) {
+
+            Toast.makeText(
+                    this,
+                    "For Progress, select an exercise from a category.",
+                    Toast.LENGTH_SHORT
+            ).show();
+
         } else {
+
             startActivity(intent);
         }
     }
+
+    // =================================================
+    // RECEIVE EXERCISES
+    // =================================================
 
     @Override
     protected void onActivityResult(
@@ -300,15 +377,74 @@ public class Option1Activity extends AppCompatActivity {
 
         super.onActivityResult(requestCode, resultCode, data);
 
+        if (resultCode != RESULT_OK || data == null) {
+            return;
+        }
+
+        // ---------------------------------------------
+        // PROGRESS SELECTION
+        // ---------------------------------------------
+
+        if (requestCode == REQUEST_PROGRESS_EXERCISE
+                && progressSelectionMode) {
+
+            ArrayList<String> exercises =
+                    data.getStringArrayListExtra("SELECTED_EXERCISES");
+
+            // Compatibility with an older single-selection result.
+            if (exercises == null) {
+                String singleExercise =
+                        data.getStringExtra("SELECTED_EXERCISE");
+
+                exercises = new ArrayList<>();
+
+                if (singleExercise != null
+                        && !singleExercise.trim().isEmpty()) {
+                    exercises.add(singleExercise.trim());
+                }
+            }
+
+            if (exercises != null) {
+
+                // Replace the selection with the updated complete list.
+                // ExerciseListActivity is responsible for preserving
+                // selections from the other categories.
+                selectedExercises.clear();
+
+                for (String exercise : exercises) {
+                    if (exercise != null
+                            && !exercise.trim().isEmpty()) {
+                        selectedExercises.add(exercise.trim());
+                    }
+                }
+
+                Toast.makeText(
+                        this,
+                        selectedExercises.size()
+                                + " workout(s) selected so far.",
+                        Toast.LENGTH_SHORT
+                ).show();
+            }
+
+            // IMPORTANT:
+            // Do not finish this activity here.
+            // The user can now select another category.
+            return;
+        }
+
+        // ---------------------------------------------
+        // ROUTINE SELECTION
+        // ---------------------------------------------
+
         if ((requestCode == REQUEST_EXERCISES
                 || requestCode == REQUEST_CUSTOM_WORKOUTS)
-                && resultCode == RESULT_OK
-                && data != null) {
+                && routineSelectionMode) {
 
             ArrayList<String> exercises =
                     data.getStringArrayListExtra("SELECTED_EXERCISES");
 
             if (exercises != null) {
+
                 selectedExercises.addAll(exercises);
 
                 Toast.makeText(
@@ -320,33 +456,53 @@ public class Option1Activity extends AppCompatActivity {
         }
     }
 
+    // =================================================
+    // FINISH SELECTION
+    // =================================================
+
     private void finishWorkoutSelection() {
 
         if (selectedExercises.isEmpty()) {
+
             Toast.makeText(
                     this,
                     "Please add at least one exercise.",
                     Toast.LENGTH_SHORT
             ).show();
+
             return;
         }
 
         Intent result = new Intent();
 
+        ArrayList<String> selectedList =
+                new ArrayList<>(selectedExercises);
+
         result.putStringArrayListExtra(
                 "SELECTED_EXERCISES",
-                new ArrayList<>(selectedExercises)
+                selectedList
+        );
+
+        // Maintain compatibility with code that still expects
+        // the first selected exercise as a single string.
+        result.putExtra(
+                "SELECTED_EXERCISE",
+                selectedList.get(0)
         );
 
         setResult(RESULT_OK, result);
         finish();
     }
 
+    // =================================================
+    // BACK BUTTON
+    // =================================================
+
     @Override
     public void onBackPressed() {
 
-        if (drawerLayout != null &&
-                drawerLayout.isDrawerOpen(GravityCompat.START)) {
+        if (drawerLayout != null
+                && drawerLayout.isDrawerOpen(GravityCompat.START)) {
 
             drawerLayout.closeDrawer(GravityCompat.START);
 

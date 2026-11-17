@@ -22,12 +22,16 @@ import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 
 import java.util.ArrayList;
-import android.content.Intent;
+import java.util.LinkedHashSet;
 
 public class ExerciseListActivity extends AppCompatActivity {
 
@@ -38,19 +42,32 @@ public class ExerciseListActivity extends AppCompatActivity {
     private Button btnAddCustomWorkout;
 
     private boolean routineSelectionMode = false;
+    private boolean progressSelectionMode = false;
+
     private String currentCategory = "Abdomen";
 
     private final ArrayList<CheckBox> exerciseCheckBoxes =
             new ArrayList<>();
 
+    // Every exercise displayed in the current category.
+    private final ArrayList<String> displayedExerciseNames =
+            new ArrayList<>();
+
+    // Exercises selected before opening this category.
+    private final ArrayList<String> selectedExercisesBefore =
+            new ArrayList<>();
+
     private static final String PREF_NAME =
             "CustomWorkoutPreferences";
 
-    private static final String KEY_CATEGORY_PREFIX = "custom_";
+    private static final String KEY_CATEGORY_PREFIX =
+            "custom_";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         setContentView(R.layout.activity_exercise_list);
 
         Toolbar toolbar = findViewById(R.id.exerciseToolbar);
@@ -61,14 +78,47 @@ public class ExerciseListActivity extends AppCompatActivity {
             getSupportActionBar().setTitle("");
         }
 
+        ViewCompat.setOnApplyWindowInsetsListener(
+                toolbar,
+                (view, windowInsets) -> {
+
+                    Insets insets = windowInsets.getInsets(
+                            WindowInsetsCompat.Type.statusBars()
+                    );
+
+                    view.setPadding(
+                            view.getPaddingLeft(),
+                            insets.top,
+                            view.getPaddingRight(),
+                            view.getPaddingBottom()
+                    );
+
+                    return windowInsets;
+                }
+        );
+
         routineSelectionMode = getIntent().getBooleanExtra(
-                "ROUTINE_SELECTION_MODE", false
+                "ROUTINE_SELECTION_MODE",
+                false
+        );
+
+        progressSelectionMode = getIntent().getBooleanExtra(
+                "PROGRESS_SELECTION_MODE",
+                false
         );
 
         currentCategory = getIntent().getStringExtra("CATEGORY");
 
         if (currentCategory == null) {
             currentCategory = "Abdomen";
+        }
+
+        // Receive the existing selection from Option1Activity.
+        ArrayList<String> previousSelection =
+                getIntent().getStringArrayListExtra("SELECTED_EXERCISES");
+
+        if (previousSelection != null) {
+            selectedExercisesBefore.addAll(previousSelection);
         }
 
         exerciseContainer = findViewById(R.id.exerciseContainer);
@@ -83,13 +133,22 @@ public class ExerciseListActivity extends AppCompatActivity {
                 showAddWorkoutDialog()
         );
 
-        if (routineSelectionMode) {
+        if (routineSelectionMode || progressSelectionMode) {
+
             btnAddSelected.setVisibility(View.VISIBLE);
+
+            if (progressSelectionMode) {
+                btnAddSelected.setText("Update Selection");
+            } else {
+                btnAddSelected.setText("Add Selected Exercises");
+            }
 
             btnAddSelected.setOnClickListener(v ->
                     returnSelectedExercises()
             );
+
         } else {
+
             btnAddSelected.setVisibility(View.GONE);
         }
 
@@ -98,6 +157,7 @@ public class ExerciseListActivity extends AppCompatActivity {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
+
         if (item.getItemId() == android.R.id.home) {
             finish();
             return true;
@@ -106,12 +166,15 @@ public class ExerciseListActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    // DISPLAY EXERCISES FOR EACH BODY PART
+    // =================================================
+    // DISPLAY EXERCISES
+    // =================================================
 
     private void displayExercises() {
 
         exerciseContainer.removeAllViews();
         exerciseCheckBoxes.clear();
+        displayedExerciseNames.clear();
 
         String[] exercises;
 
@@ -237,16 +300,27 @@ public class ExerciseListActivity extends AppCompatActivity {
         JSONArray customExercises = getCustomExercises();
 
         for (int i = 0; i < customExercises.length(); i++) {
+
             try {
                 String exerciseName = customExercises.getString(i);
                 addExerciseCard(exerciseName, true);
+
             } catch (JSONException e) {
                 e.printStackTrace();
             }
         }
     }
 
-    private void addExerciseCard(String exerciseName, boolean isCustom) {
+    // =================================================
+    // EXERCISE CARD
+    // =================================================
+
+    private void addExerciseCard(
+            String exerciseName,
+            boolean isCustom) {
+
+        // Track every exercise in this category.
+        displayedExerciseNames.add(exerciseName);
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.HORIZONTAL);
@@ -268,7 +342,6 @@ public class ExerciseListActivity extends AppCompatActivity {
         card.setLayoutParams(cardParams);
         card.setMinimumHeight(dp(82));
 
-        // Dumbbell icon background
         LinearLayout iconBackground = new LinearLayout(this);
         iconBackground.setGravity(Gravity.CENTER);
 
@@ -295,7 +368,6 @@ public class ExerciseListActivity extends AppCompatActivity {
 
         card.addView(iconBackground);
 
-        // Exercise name and description
         LinearLayout textLayout = new LinearLayout(this);
         textLayout.setOrientation(LinearLayout.VERTICAL);
         textLayout.setGravity(Gravity.CENTER_VERTICAL);
@@ -317,8 +389,9 @@ public class ExerciseListActivity extends AppCompatActivity {
 
         TextView description = new TextView(this);
         description.setText(
-                isCustom ? "Your custom exercise" :
-                        currentCategory + " exercise"
+                isCustom
+                        ? "Your custom exercise"
+                        : currentCategory + " exercise"
         );
         description.setTextColor(Color.rgb(143, 149, 161));
         description.setTextSize(12);
@@ -328,8 +401,7 @@ public class ExerciseListActivity extends AppCompatActivity {
 
         card.addView(textLayout);
 
-        // Selection checkbox
-        if (routineSelectionMode) {
+        if (routineSelectionMode || progressSelectionMode) {
 
             CheckBox checkBox = new CheckBox(this);
 
@@ -343,8 +415,21 @@ public class ExerciseListActivity extends AppCompatActivity {
             checkBox.setLayoutParams(checkParams);
             checkBox.setTag(exerciseName);
 
+            // Restore the previous selection for this exercise.
+            if (progressSelectionMode) {
+                checkBox.setChecked(
+                        containsIgnoreCase(
+                                selectedExercisesBefore,
+                                exerciseName
+                        )
+                );
+            }
+
             card.addView(checkBox);
             exerciseCheckBoxes.add(checkBox);
+
+            // Progress mode intentionally allows MULTIPLE checkboxes.
+            // There is no listener that unchecks other exercises.
 
             card.setOnClickListener(v ->
                     checkBox.setChecked(!checkBox.isChecked())
@@ -372,25 +457,77 @@ public class ExerciseListActivity extends AppCompatActivity {
             );
         }
 
-        if (!routineSelectionMode) {
-            card.setOnClickListener(v -> {
-                Intent intent = new Intent(
-                        ExerciseListActivity.this,
-                        WorkoutSessionActivity.class
-                );
-                intent.putExtra("EXERCISE_NAME", exerciseName);
-                startActivity(intent);
-            });
-        }
-
-
         exerciseContainer.addView(card);
     }
 
+    private boolean containsIgnoreCase(
+            ArrayList<String> list,
+            String value) {
+
+        for (String item : list) {
+            if (item != null && item.equalsIgnoreCase(value)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // =================================================
+    // RETURN SELECTED EXERCISES
+    // =================================================
+
     private void returnSelectedExercises() {
 
-        ArrayList<String> selectedExercises = new ArrayList<>();
+        ArrayList<String> selectedExercises =
+                new ArrayList<>();
 
+        if (progressSelectionMode) {
+
+            // Start with selections from all the OTHER categories.
+            LinkedHashSet<String> updatedSelection =
+                    new LinkedHashSet<>(selectedExercisesBefore);
+
+            // Remove the old selections belonging to this category.
+            // This also allows the user to uncheck an exercise.
+            for (String displayedName : displayedExerciseNames) {
+                removeIgnoreCase(updatedSelection, displayedName);
+            }
+
+            // Add the currently checked exercises from this category.
+            for (CheckBox checkBox : exerciseCheckBoxes) {
+
+                if (checkBox.isChecked()) {
+
+                    String name = checkBox.getTag().toString();
+
+                    if (!containsIgnoreCase(
+                            new ArrayList<>(updatedSelection),
+                            name
+                    )) {
+                        updatedSelection.add(name);
+                    }
+                }
+            }
+
+            selectedExercises.addAll(updatedSelection);
+
+            // Returning an empty list is allowed in Progress mode.
+            // It means the user intentionally removed the selections
+            // from this category.
+            Intent resultIntent = new Intent();
+
+            resultIntent.putStringArrayListExtra(
+                    "SELECTED_EXERCISES",
+                    selectedExercises
+            );
+
+            setResult(RESULT_OK, resultIntent);
+            finish();
+            return;
+        }
+
+        // Existing Routine selection behavior.
         for (CheckBox checkBox : exerciseCheckBoxes) {
 
             if (checkBox.isChecked()) {
@@ -399,11 +536,13 @@ public class ExerciseListActivity extends AppCompatActivity {
         }
 
         if (selectedExercises.isEmpty()) {
+
             Toast.makeText(
                     this,
-                    "Please select at least one exercise.",
+                    "Please select an exercise.",
                     Toast.LENGTH_SHORT
             ).show();
+
             return;
         }
 
@@ -418,7 +557,27 @@ public class ExerciseListActivity extends AppCompatActivity {
         finish();
     }
 
-    // CUSTOM EXERCISE STORAGE
+    private void removeIgnoreCase(
+            LinkedHashSet<String> set,
+            String value) {
+
+        String matchingItem = null;
+
+        for (String item : set) {
+            if (item.equalsIgnoreCase(value)) {
+                matchingItem = item;
+                break;
+            }
+        }
+
+        if (matchingItem != null) {
+            set.remove(matchingItem);
+        }
+    }
+
+    // =================================================
+    // CUSTOM EXERCISES STORAGE
+    // =================================================
 
     private JSONArray getCustomExercises() {
 
@@ -450,39 +609,80 @@ public class ExerciseListActivity extends AppCompatActivity {
                 .apply();
     }
 
+    // =================================================
+    // ADD CUSTOM WORKOUT
+    // =================================================
+
     private void showAddWorkoutDialog() {
 
         EditText input = new EditText(this);
         input.setHint("Enter exercise name");
         input.setSingleLine(true);
+        input.setTextColor(Color.WHITE);
+        input.setHintTextColor(Color.rgb(143, 149, 161));
 
         int padding = dp(16);
         input.setPadding(padding, padding, padding, padding);
 
-        new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Add Your Own Workout")
                 .setMessage("Enter the name of your custom exercise.")
                 .setView(input)
-                .setNegativeButton("Cancel", (dialog, which) -> {
-                })
-                .setPositiveButton("Add", (dialog, which) -> {
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Add", (dialogInterface, which) -> {
 
                     String name = input.getText()
                             .toString()
                             .trim();
 
                     if (name.isEmpty()) {
+
                         Toast.makeText(
                                 this,
                                 "Please enter an exercise name.",
                                 Toast.LENGTH_SHORT
                         ).show();
+
                         return;
                     }
 
                     saveCustomWorkout(name);
                 })
-                .show();
+                .create();
+
+        dialog.setOnShowListener(d -> {
+
+            if (dialog.getWindow() != null) {
+
+                GradientDrawable background = new GradientDrawable();
+                background.setColor(Color.rgb(41, 45, 53));
+                background.setCornerRadius(dp(16));
+
+                dialog.getWindow().setBackgroundDrawable(background);
+            }
+
+            TextView title = dialog.findViewById(
+                    androidx.appcompat.R.id.alertTitle
+            );
+
+            if (title != null) {
+                title.setTextColor(Color.WHITE);
+            }
+
+            TextView message = dialog.findViewById(android.R.id.message);
+
+            if (message != null) {
+                message.setTextColor(Color.rgb(143, 149, 161));
+            }
+
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                    .setTextColor(Color.WHITE);
+
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+                    .setTextColor(Color.WHITE);
+        });
+
+        dialog.show();
     }
 
     private void saveCustomWorkout(String name) {
@@ -490,12 +690,15 @@ public class ExerciseListActivity extends AppCompatActivity {
         JSONArray exercises = getCustomExercises();
 
         for (int i = 0; i < exercises.length(); i++) {
+
             if (exercises.optString(i).equalsIgnoreCase(name)) {
+
                 Toast.makeText(
                         this,
                         "This exercise already exists.",
                         Toast.LENGTH_SHORT
                 ).show();
+
                 return;
             }
         }
@@ -512,16 +715,54 @@ public class ExerciseListActivity extends AppCompatActivity {
         ).show();
     }
 
+    // =================================================
+    // REMOVE CUSTOM WORKOUT
+    // =================================================
+
     private void confirmRemoveWorkout(String name) {
 
-        new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Remove Exercise")
                 .setMessage("Are you sure you want to remove " + name + "?")
                 .setNegativeButton("Cancel", null)
-                .setPositiveButton("Remove", (dialog, which) ->
+                .setPositiveButton("Remove", (dialogInterface, which) ->
                         removeCustomWorkout(name)
                 )
-                .show();
+                .create();
+
+        dialog.setOnShowListener(d -> {
+
+            if (dialog.getWindow() != null) {
+
+                GradientDrawable background = new GradientDrawable();
+                background.setColor(Color.rgb(41, 45, 53));
+                background.setCornerRadius(dp(16));
+
+                dialog.getWindow().setBackgroundDrawable(background);
+            }
+
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                    .setTextColor(Color.WHITE);
+
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+                    .setTextColor(Color.WHITE);
+
+            TextView title = dialog.findViewById(
+                    androidx.appcompat.R.id.alertTitle
+            );
+
+            if (title != null) {
+                title.setTextColor(Color.WHITE);
+            }
+
+            TextView message = dialog.findViewById(android.R.id.message);
+
+            if (message != null) {
+                message.setTextColor(Color.rgb(143, 149, 161));
+            }
+        });
+
+        dialog.show();
     }
 
     private void removeCustomWorkout(String name) {
@@ -548,8 +789,15 @@ public class ExerciseListActivity extends AppCompatActivity {
         ).show();
     }
 
+    // =================================================
+    // DP HELPER
+    // =================================================
+
     private int dp(int value) {
-        return (int) (value *
-                getResources().getDisplayMetrics().density + 0.5f);
+
+        return (int) (
+                value * getResources().getDisplayMetrics().density
+                        + 0.5f
+        );
     }
 }
