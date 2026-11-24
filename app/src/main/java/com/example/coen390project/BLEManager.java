@@ -67,6 +67,10 @@ import android.annotation.SuppressLint;
         private BluetoothLeScanner scanner;
         private BluetoothGatt gatt;
         private boolean scanning = false;
+    private boolean connecting = false;
+    private boolean manuallyDisconnected = false;
+    private static final long RECONNECT_DELAY_MS = 3000;
+    private boolean reconnectScheduled = false;
 
         private long lastSequence = -1;
 
@@ -110,6 +114,11 @@ import android.annotation.SuppressLint;
         // =====================================
         @SuppressLint("MissingPermission")
         public void scanAndConnect() {
+            if (scanning || connecting || gatt != null) {
+                return;
+            }
+
+            manuallyDisconnected = false;
 
             if (!hasPermissions()) {
                 error("Bluetooth permissions are missing");
@@ -150,6 +159,10 @@ import android.annotation.SuppressLint;
                 if (scanning) {
                     stopScan();
                     error("Barbell Tracker not found");
+
+                    if (!manuallyDisconnected) {
+                        scheduleReconnect();
+                    }
                 }
             }, 10000);
         }
@@ -162,6 +175,7 @@ import android.annotation.SuppressLint;
                 if (!scanning || !hasPermissions()) return;
 
                 stopScan();
+                connecting = true;
 
                 status("ESP32 found. Connecting...");
 
@@ -179,6 +193,10 @@ import android.annotation.SuppressLint;
             public void onScanFailed(int errorCode) {
                 scanning = false;
                 error("BLE scan failed: " + errorCode);
+
+                if (!manuallyDisconnected) {
+                    scheduleReconnect();
+                }
             }
         };
 
@@ -202,11 +220,16 @@ import android.annotation.SuppressLint;
                             BluetoothGatt g,
                             int statusCode,
                             int newState) {
+                        connecting = false;
 
                         if (statusCode != BluetoothGatt.GATT_SUCCESS) {
                             error("BLE connection error: " + statusCode);
                             g.close();
-                            if (gatt == g) gatt = null;
+
+                            if (gatt == g) {
+                                gatt = null;
+                                scheduleReconnect();
+                            }
                             return;
                         }
 
@@ -222,7 +245,11 @@ import android.annotation.SuppressLint;
                         } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                             status("Disconnected");
                             g.close();
-                            if (gatt == g) gatt = null;
+
+                            if (gatt == g) {
+                                gatt = null;
+                                scheduleReconnect();
+                            }
                         }
                     }
 
@@ -392,13 +419,40 @@ import android.annotation.SuppressLint;
         // DISCONNECT
         // =====================================
 
-        public void disconnect() {
-            stopScan();
-
-            if (gatt != null) {
-                gatt.disconnect();
-            }
+    private void scheduleReconnect() {
+        if (manuallyDisconnected || reconnectScheduled) {
+            return;
         }
+
+        reconnectScheduled = true;
+
+        status("Bluetooth disconnected. Reconnecting in 3 seconds...");
+
+        mainHandler.postDelayed(() -> {
+            reconnectScheduled = false;
+
+            if (!manuallyDisconnected
+                    && gatt == null
+                    && !scanning
+                    && !connecting
+                    && hasPermissions()
+                    && adapter != null
+                    && adapter.isEnabled()) {
+
+                scanAndConnect();
+            }
+        }, RECONNECT_DELAY_MS);
+    }
+
+    public void disconnect() {
+        manuallyDisconnected = true;
+        stopScan();
+
+        if (gatt != null) {
+            BluetoothGatt currentGatt = gatt;
+            currentGatt.disconnect();
+        }
+    }
     }
 
 

@@ -31,6 +31,9 @@
             android:name=".ExerciseListActivity"
             android:exported="false" />
         <activity
+            android:name=".WorkoutSessionActivity"
+            android:exported="false" />
+        <activity
             android:name=".Option1Activity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />

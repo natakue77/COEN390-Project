@@ -102,7 +102,12 @@ public class MainActivity extends AppCompatActivity
 
     private BLEManager bleManager;
 
-    private SensorProcess sensorProcess = new SensorProcess();
+    private SensorProcess sensorProcess = SensorProcess.getInstance();
+    // Temporary test mode for the Android emulator
+    private static final boolean SIMULATE_IMU = false;
+    // Timer for simulated IMU readings
+    private final android.os.Handler simulationHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
 
     private final ActivityResultLauncher<String[]> permissionLauncher =
             registerForActivityResult(
@@ -248,7 +253,11 @@ public class MainActivity extends AppCompatActivity
         buildDashboard();
 
         // Start searching for the ESP32 tracker.
-        connectToTracker();
+        if (SIMULATE_IMU) {
+            simulationHandler.post(simulationRunnable);
+        } else {
+            connectToTracker();
+        }
     }
 
     // =================================================
@@ -808,7 +817,6 @@ public class MainActivity extends AppCompatActivity
         }
 
         Map<String, Object> workoutData = new HashMap<>();
-
         workoutData.put("sessionId", sessionKey);
         workoutData.put("date", formatDate(System.currentTimeMillis()));
         workoutData.put("completionTime", System.currentTimeMillis());
@@ -2699,4 +2707,71 @@ public class MainActivity extends AppCompatActivity
             buildDashboard();
         }
     }
+    @Override
+    protected void onDestroy() {
+        // Stop simulated IMU readings
+        simulationHandler.removeCallbacks(simulationRunnable);
+
+        // Disconnect Bluetooth
+        if (bleManager != null) {
+            bleManager.disconnect();
+        }
+
+        super.onDestroy();
+    }
+    private long simulationSampleCount = 0;
+    private BLEManager.SensorSample createSimulatedSample() {
+        BLEManager.SensorSample sample = new BLEManager.SensorSample();
+
+        sample.timestampUs = android.os.SystemClock.elapsedRealtimeNanos() / 1000L;
+        sample.sequence = 0;
+
+        // Stationary sensor: gravity along Z
+        simulationSampleCount++;
+
+        long phase = simulationSampleCount % 200;
+
+// Simulate one movement every 4 seconds
+        if (phase >= 50 && phase < 125) {
+            // Movement lasting approximately 1.5 seconds
+            sample.ax = (float) (0.20 * Math.sin(
+                    2.0 * Math.PI * (phase - 50) / 75.0
+            ));
+        } else {
+            // Resting
+            sample.ax = 0.0f;
+        }
+
+        sample.ay = 0.0f;
+        sample.az = 1.0f;
+
+        // No rotation
+        sample.gx = 0.0f;
+        sample.gy = 0.0f;
+        sample.gz = 0.0f;
+
+        // Neutral orientation
+        sample.qw = 1.0f;
+        sample.qx = 0.0f;
+        sample.qy = 0.0f;
+        sample.qz = 0.0f;
+
+        return sample;
+    }
+    private final Runnable simulationRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!SIMULATE_IMU) {
+                return;
+            }
+
+            BLEManager.SensorSample sample = createSimulatedSample();
+
+            // Send simulated data through existing processing code
+            onSample(sample);
+
+            // Generate another sample after 20 milliseconds
+            simulationHandler.postDelayed(this, 20);
+        }
+    };
 }

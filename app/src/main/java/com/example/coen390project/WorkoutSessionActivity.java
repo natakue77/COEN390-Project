@@ -12,6 +12,13 @@ import android.view.View;
 import android.widget.Button;
 import android.os.Handler;
 import android.os.Looper;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.DatabaseReference;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Date;
+import java.util.Locale;
+import java.text.SimpleDateFormat;
 
 public class WorkoutSessionActivity extends AppCompatActivity {
     private Handler repHandler;
@@ -137,6 +144,39 @@ public class WorkoutSessionActivity extends AppCompatActivity {
                 statusText.setText("Workout completed and saved!");
             } else {
                 statusText.setText("Workout completed, but saving failed.");
+            }
+            if (saved) {
+                String sessionId = "auto_" + System.currentTimeMillis();
+
+                Map<String, Object> workoutData = new HashMap<>();
+                workoutData.put("sessionId", sessionId);
+                workoutData.put("date", new SimpleDateFormat(
+                        "yyyy-MM-dd", Locale.US).format(new Date()));
+                workoutData.put("completionTime", System.currentTimeMillis());
+                workoutData.put("completed", true);
+
+                Map<String, Object> exerciseData = new HashMap<>();
+                exerciseData.put("name", exerciseNameText.getText().toString());
+                exerciseData.put("reps", totalReps);
+                exerciseData.put("sets", 1);
+                exerciseData.put("completed", true);
+
+                java.util.ArrayList<Map<String, Object>> exercises =
+                        new java.util.ArrayList<>();
+                exercises.add(exerciseData);
+
+                workoutData.put("exercises", exercises);
+
+                FirebaseDatabase.getInstance()
+                        .getReference("completedWorkouts")
+                        .child(sessionId)
+                        .setValue(workoutData)
+                        .addOnFailureListener(error ->
+                                android.util.Log.e(
+                                        "WorkoutSave",
+                                        "Firebase save failed",
+                                        error
+                                ));
             }
 
             repCountText.setText(totalReps + " Reps");

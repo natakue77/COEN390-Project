@@ -435,6 +435,18 @@ public class ExerciseListActivity extends AppCompatActivity {
                     checkBox.setChecked(!checkBox.isChecked())
             );
 
+        } else if (!isCustom) {
+
+            card.setOnClickListener(v -> {
+                Intent intent = new Intent(
+                        ExerciseListActivity.this,
+                        WorkoutSessionActivity.class
+                );
+
+                intent.putExtra("EXERCISE_NAME", exerciseName);
+                startActivity(intent);
+            });
+
         } else if (isCustom) {
 
             Button removeButton = new Button(this);
