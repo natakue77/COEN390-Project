@@ -27,5 +27,18 @@ public class HeartRateActivity extends AppCompatActivity {
         }
 
         toolbar.setNavigationOnClickListener(v -> finish());
+        TextView heartRateValue = findViewById(R.id.heartRateValue);
+        TextView heartRateMessage = findViewById(R.id.heartRateMessage);
+
+        HeartRateData.getHeartRate().observe(this, bpm -> {
+
+            if (bpm != null && bpm > 0) {
+                heartRateValue.setText(bpm + " BPM");
+                heartRateMessage.setText("Live heart rate from your tracker");
+            } else {
+                heartRateValue.setText("-- BPM");
+                heartRateMessage.setText("Waiting for heart rate measurements.");
+            }
+        });
     }
 }

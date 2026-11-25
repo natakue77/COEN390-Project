@@ -35,6 +35,8 @@ import android.annotation.SuppressLint;
 
         private static final UUID DATA_UUID =
                 UUID.fromString("00001234-0000-1000-8000-00805f9b34fb");
+        private static final UUID HEART_RATE_UUID =
+            UUID.fromString("00001235-0000-1000-8000-00805f9b34fb");
 
         private static final UUID CCCD_UUID =
                 UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
@@ -46,6 +48,9 @@ import android.annotation.SuppressLint;
             void onStatus(String message);
             void onSample(SensorSample sample);
             void onError(String message);
+
+            default void onHeartRate(int bpm) {
+            }
         }
 
         public static class SensorSample {
@@ -327,10 +332,59 @@ import android.annotation.SuppressLint;
                             BluetoothGattDescriptor descriptor,
                             int statusCode) {
 
-                        if (statusCode == BluetoothGatt.GATT_SUCCESS) {
-                            status("Receiving IMU samples");
-                        } else {
+                        if (statusCode != BluetoothGatt.GATT_SUCCESS) {
                             error("Notification subscription failed");
+                            return;
+                        }
+
+                        UUID uuid = descriptor.getCharacteristic().getUuid();
+
+                        if (DATA_UUID.equals(uuid)) {
+                            status("Receiving IMU samples");
+
+                            BluetoothGattService service = g.getService(SERVICE_UUID);
+
+                            if (service == null) return;
+
+                            BluetoothGattCharacteristic heartChar =
+                                    service.getCharacteristic(HEART_RATE_UUID);
+
+                            if (heartChar == null) {
+                                error("Heart rate characteristic not found");
+                                return;
+                            }
+
+                            if (!g.setCharacteristicNotification(heartChar, true)) {
+                                error("Could not enable heart rate notifications");
+                                return;
+                            }
+
+                            BluetoothGattDescriptor heartDescriptor =
+                                    heartChar.getDescriptor(CCCD_UUID);
+
+                            if (heartDescriptor == null) {
+                                error("Heart rate descriptor not found");
+                                return;
+                            }
+
+                            byte[] enable =
+                                    BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE;
+
+                            if (Build.VERSION.SDK_INT >= 33) {
+                                if (g.writeDescriptor(heartDescriptor, enable)
+                                        != android.bluetooth.BluetoothStatusCodes.SUCCESS) {
+                                    error("Could not subscribe to heart rate");
+                                }
+                            } else {
+                                heartDescriptor.setValue(enable);
+
+                                if (!g.writeDescriptor(heartDescriptor)) {
+                                    error("Could not subscribe to heart rate");
+                                }
+                            }
+
+                        } else if (HEART_RATE_UUID.equals(uuid)) {
+                            status("Receiving IMU and heart rate");
                         }
                     }
 
@@ -344,6 +398,9 @@ import android.annotation.SuppressLint;
                         if (DATA_UUID.equals(characteristic.getUuid())) {
                             decodePacket(value);
                         }
+                        else if (HEART_RATE_UUID.equals(characteristic.getUuid())) {
+                            decodeHeartRate(value);
+                        }
                     }
 
                     // Android 12 and earlier
@@ -353,13 +410,27 @@ import android.annotation.SuppressLint;
                             BluetoothGatt g,
                             BluetoothGattCharacteristic characteristic) {
 
-                        if (Build.VERSION.SDK_INT < 33
-                                && DATA_UUID.equals(characteristic.getUuid())) {
-                            decodePacket(characteristic.getValue());
+                        if (Build.VERSION.SDK_INT < 33) {
+
+                            if (DATA_UUID.equals(characteristic.getUuid())) {
+                                decodePacket(characteristic.getValue());
+                            }
+                            else if (HEART_RATE_UUID.equals(characteristic.getUuid())) {
+                                decodeHeartRate(characteristic.getValue());
+                            }
                         }
                     }
                 };
+    private void decodeHeartRate(byte[] data) {
 
+        if (data == null || data.length != 1) {
+            return;
+        }
+
+        int bpm = data[0] & 0xFF;
+
+        mainHandler.post(() -> listener.onHeartRate(bpm));
+    }
         // =====================================
         // DECODE IMU SAMPLES
         // =====================================

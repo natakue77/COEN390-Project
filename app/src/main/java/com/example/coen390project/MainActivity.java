@@ -101,6 +101,18 @@ public class MainActivity extends AppCompatActivity
     // =================================================
 
     private BLEManager bleManager;
+    private TextView heartRateText;
+    private TextView heartRateStatus;
+    private TextView heartRateDescription;
+
+    private int currentHeartRate = 0;
+    private final android.os.Handler heartRateHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+
+    private final Runnable heartRateTimeout = () -> {
+        currentHeartRate = 0;
+        updateHeartRateDisplay();
+    };
 
     private SensorProcess sensorProcess = SensorProcess.getInstance();
     // Temporary test mode for the Android emulator
@@ -251,6 +263,7 @@ public class MainActivity extends AppCompatActivity
 
         setupToolbar();
         buildDashboard();
+
 
         // Start searching for the ESP32 tracker.
         if (SIMULATE_IMU) {
@@ -2369,9 +2382,11 @@ public class MainActivity extends AppCompatActivity
                 1
         ));
 
-        top.addView(createText(
-                "COMING SOON", 10, MUTED, true
-        ));
+        heartRateStatus = createText(
+                "WAITING", 10, MUTED, true
+        );
+
+        top.addView(heartRateStatus);
 
         card.addView(top);
 
@@ -2398,33 +2413,38 @@ public class MainActivity extends AppCompatActivity
 
         heartRateRow.addView(heartImage);
 
-        TextView heart = createText(
-                "-- BPM", 29, Color.rgb(240, 107, 120), true
+        heartRateText = createText(
+                currentHeartRate > 0
+                        ? currentHeartRate + " BPM"
+                        : "-- BPM",
+                29, Color.rgb(240, 107, 120), true
         );
 
-        heart.setGravity(Gravity.CENTER_VERTICAL);
+        heartRateText.setGravity(Gravity.CENTER_VERTICAL);
 
-        heartRateRow.addView(heart);
+        heartRateRow.addView(heartRateText);
         card.addView(heartRateRow);
 
-        TextView description = createText(
-                "Heart rate sensor integration coming soon.",
+        heartRateDescription = createText(
+                "Waiting for heart rate measurements.",
                 12,
                 MUTED,
                 false
         );
 
-        description.setGravity(Gravity.CENTER);
-        description.setPadding(0, dp(8), 0, 0);
+        heartRateDescription.setGravity(Gravity.CENTER);
+        heartRateDescription.setPadding(0, dp(8), 0, 0);
 
-        card.addView(description);
+        card.addView(heartRateDescription);
 
         card.setOnClickListener(
                 v -> openActivity(HeartRateActivity.class)
         );
 
         dashboardContainer.addView(card);
+        updateHeartRateDisplay();
     }
+
 
     // =================================================
     // DESIGN HELPERS
@@ -2654,11 +2674,53 @@ public class MainActivity extends AppCompatActivity
             // );
         }
     }
-
     @Override
-    public void onStatus(String message) {
-        android.util.Log.d("BarbellBLE", message);
+    public void onHeartRate(int bpm) {
+        currentHeartRate = bpm;
+
+        android.util.Log.d("BarbellBLE", "Heart rate: " + bpm + " BPM");
+
+        heartRateHandler.removeCallbacks(heartRateTimeout);
+
+        if (bpm > 0) {
+            heartRateHandler.postDelayed(heartRateTimeout, 5000);
+        }
+
+        updateHeartRateDisplay();
     }
+
+    private void updateHeartRateDisplay() {
+        HeartRateData.setHeartRate(currentHeartRate);
+        if (heartRateText == null
+                || heartRateStatus == null
+                || heartRateDescription == null) {
+            return;
+        }
+
+        if (currentHeartRate > 0) {
+            heartRateText.setText(currentHeartRate + " BPM");
+            heartRateStatus.setText("LIVE");
+            heartRateDescription.setText(
+                    "Live heart rate from your tracker"
+            );
+        } else {
+            heartRateText.setText("-- BPM");
+            heartRateStatus.setText("WAITING");
+            heartRateDescription.setText(
+                    "Waiting for heart rate measurements."
+            );
+        }
+    }
+@Override
+public void onStatus(String message) {
+    android.util.Log.d("BarbellBLE", message);
+
+    if ("Disconnected".equals(message)) {
+        heartRateHandler.removeCallbacks(heartRateTimeout);
+        currentHeartRate = 0;
+        updateHeartRateDisplay();
+    }
+}
 
     @Override
     public void onError(String message) {
@@ -2709,6 +2771,7 @@ public class MainActivity extends AppCompatActivity
     }
     @Override
     protected void onDestroy() {
+        heartRateHandler.removeCallbacks(heartRateTimeout);
         // Stop simulated IMU readings
         simulationHandler.removeCallbacks(simulationRunnable);
 
