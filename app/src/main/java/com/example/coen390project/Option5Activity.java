@@ -21,6 +21,10 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
+import com.google.firebase.auth.FirebaseAuth;
+import android.content.Intent;
+import android.widget.Button;
+import android.widget.Toast;
 
 import com.google.android.material.navigation.NavigationView;
 
@@ -52,6 +56,26 @@ public class Option5Activity extends AppCompatActivity
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
         setContentView(R.layout.activity_option5);
+        Button btnLogout = findViewById(R.id.btnLogout);
+
+        btnLogout.setOnClickListener(v -> {
+            FirebaseAuth.getInstance().signOut();
+
+            Toast.makeText(
+                    Option5Activity.this,
+                    "You have been logged out",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            Intent intent = new Intent(Option5Activity.this, LoginActivity.class);
+
+            // Prevent the user from returning to the previous screen with Back.
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK |
+                    Intent.FLAG_ACTIVITY_CLEAR_TASK);
+
+            startActivity(intent);
+            finish();
+        });
 
         View mainContent = findViewById(R.id.mainContent);
 

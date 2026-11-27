@@ -182,9 +182,20 @@
                     android:textColor="#FFFFFF"
                     android:textStyle="bold"
                     android:textAllCaps="false"
-                    android:backgroundTint="#D32F2F"
+                    android:backgroundTint="#8F95A1"
                     android:layout_marginTop="20dp"
                     android:layout_marginBottom="24dp" />
+                <Button
+                    android:id="@+id/btnLogout"
+                    android:layout_width="match_parent"
+                    android:layout_height="55dp"
+                    android:layout_marginTop="24dp"
+                    android:backgroundTint="#D32F2F"
+                    android:text="Log Out"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                     />
 
             </LinearLayout>
 

@@ -24,6 +24,7 @@ import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.google.firebase.auth.FirebaseAuth;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
@@ -203,6 +204,18 @@ public class MainActivity extends AppCompatActivity
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Check whether the user is authenticated.
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+
+            Intent intent = new Intent(
+                    MainActivity.this,
+                    LoginActivity.class
+            );
+
+            startActivity(intent);
+            finish();
+            return;
+        }
 
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(
                 getWindow(), false
