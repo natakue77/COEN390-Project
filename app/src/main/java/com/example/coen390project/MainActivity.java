@@ -102,8 +102,25 @@ public class MainActivity extends AppCompatActivity
     // =================================================
 
     private BLEManager bleManager;
+    private TextView heartRateText;
+    private TextView heartRateStatus;
+    private TextView heartRateDescription;
 
-    private SensorProcess sensorProcess = new SensorProcess();
+    private int currentHeartRate = 0;
+    private final android.os.Handler heartRateHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+
+    private final Runnable heartRateTimeout = () -> {
+        currentHeartRate = 0;
+        updateHeartRateDisplay();
+    };
+
+    private SensorProcess sensorProcess = SensorProcess.getInstance();
+    // Temporary test mode for the Android emulator
+    private static final boolean SIMULATE_IMU = false;
+    // Timer for simulated IMU readings
+    private final android.os.Handler simulationHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
 
     private final ActivityResultLauncher<String[]> permissionLauncher =
             registerForActivityResult(
@@ -260,8 +277,13 @@ public class MainActivity extends AppCompatActivity
         setupToolbar();
         buildDashboard();
 
+
         // Start searching for the ESP32 tracker.
-        connectToTracker();
+        if (SIMULATE_IMU) {
+            simulationHandler.post(simulationRunnable);
+        } else {
+            connectToTracker();
+        }
     }
 
     // =================================================
@@ -821,7 +843,6 @@ public class MainActivity extends AppCompatActivity
         }
 
         Map<String, Object> workoutData = new HashMap<>();
-
         workoutData.put("sessionId", sessionKey);
         workoutData.put("date", formatDate(System.currentTimeMillis()));
         workoutData.put("completionTime", System.currentTimeMillis());
@@ -2374,9 +2395,11 @@ public class MainActivity extends AppCompatActivity
                 1
         ));
 
-        top.addView(createText(
-                "COMING SOON", 10, MUTED, true
-        ));
+        heartRateStatus = createText(
+                "WAITING", 10, MUTED, true
+        );
+
+        top.addView(heartRateStatus);
 
         card.addView(top);
 
@@ -2403,33 +2426,38 @@ public class MainActivity extends AppCompatActivity
 
         heartRateRow.addView(heartImage);
 
-        TextView heart = createText(
-                "-- BPM", 29, Color.rgb(240, 107, 120), true
+        heartRateText = createText(
+                currentHeartRate > 0
+                        ? currentHeartRate + " BPM"
+                        : "-- BPM",
+                29, Color.rgb(240, 107, 120), true
         );
 
-        heart.setGravity(Gravity.CENTER_VERTICAL);
+        heartRateText.setGravity(Gravity.CENTER_VERTICAL);
 
-        heartRateRow.addView(heart);
+        heartRateRow.addView(heartRateText);
         card.addView(heartRateRow);
 
-        TextView description = createText(
-                "Heart rate sensor integration coming soon.",
+        heartRateDescription = createText(
+                "Waiting for heart rate measurements.",
                 12,
                 MUTED,
                 false
         );
 
-        description.setGravity(Gravity.CENTER);
-        description.setPadding(0, dp(8), 0, 0);
+        heartRateDescription.setGravity(Gravity.CENTER);
+        heartRateDescription.setPadding(0, dp(8), 0, 0);
 
-        card.addView(description);
+        card.addView(heartRateDescription);
 
         card.setOnClickListener(
                 v -> openActivity(HeartRateActivity.class)
         );
 
         dashboardContainer.addView(card);
+        updateHeartRateDisplay();
     }
+
 
     // =================================================
     // DESIGN HELPERS
@@ -2659,11 +2687,53 @@ public class MainActivity extends AppCompatActivity
             // );
         }
     }
-
     @Override
-    public void onStatus(String message) {
-        android.util.Log.d("BarbellBLE", message);
+    public void onHeartRate(int bpm) {
+        currentHeartRate = bpm;
+
+        android.util.Log.d("BarbellBLE", "Heart rate: " + bpm + " BPM");
+
+        heartRateHandler.removeCallbacks(heartRateTimeout);
+
+        if (bpm > 0) {
+            heartRateHandler.postDelayed(heartRateTimeout, 5000);
+        }
+
+        updateHeartRateDisplay();
     }
+
+    private void updateHeartRateDisplay() {
+        HeartRateData.setHeartRate(currentHeartRate);
+        if (heartRateText == null
+                || heartRateStatus == null
+                || heartRateDescription == null) {
+            return;
+        }
+
+        if (currentHeartRate > 0) {
+            heartRateText.setText(currentHeartRate + " BPM");
+            heartRateStatus.setText("LIVE");
+            heartRateDescription.setText(
+                    "Live heart rate from your tracker"
+            );
+        } else {
+            heartRateText.setText("-- BPM");
+            heartRateStatus.setText("WAITING");
+            heartRateDescription.setText(
+                    "Waiting for heart rate measurements."
+            );
+        }
+    }
+@Override
+public void onStatus(String message) {
+    android.util.Log.d("BarbellBLE", message);
+
+    if ("Disconnected".equals(message)) {
+        heartRateHandler.removeCallbacks(heartRateTimeout);
+        currentHeartRate = 0;
+        updateHeartRateDisplay();
+    }
+}
 
     @Override
     public void onError(String message) {
@@ -2712,4 +2782,72 @@ public class MainActivity extends AppCompatActivity
             buildDashboard();
         }
     }
+    @Override
+    protected void onDestroy() {
+        heartRateHandler.removeCallbacks(heartRateTimeout);
+        // Stop simulated IMU readings
+        simulationHandler.removeCallbacks(simulationRunnable);
+
+        // Disconnect Bluetooth
+        if (bleManager != null) {
+            bleManager.disconnect();
+        }
+
+        super.onDestroy();
+    }
+    private long simulationSampleCount = 0;
+    private BLEManager.SensorSample createSimulatedSample() {
+        BLEManager.SensorSample sample = new BLEManager.SensorSample();
+
+        sample.timestampUs = android.os.SystemClock.elapsedRealtimeNanos() / 1000L;
+        sample.sequence = 0;
+
+        // Stationary sensor: gravity along Z
+        simulationSampleCount++;
+
+        long phase = simulationSampleCount % 200;
+
+// Simulate one movement every 4 seconds
+        if (phase >= 50 && phase < 125) {
+            // Movement lasting approximately 1.5 seconds
+            sample.ax = (float) (0.20 * Math.sin(
+                    2.0 * Math.PI * (phase - 50) / 75.0
+            ));
+        } else {
+            // Resting
+            sample.ax = 0.0f;
+        }
+
+        sample.ay = 0.0f;
+        sample.az = 1.0f;
+
+        // No rotation
+        sample.gx = 0.0f;
+        sample.gy = 0.0f;
+        sample.gz = 0.0f;
+
+        // Neutral orientation
+        sample.qw = 1.0f;
+        sample.qx = 0.0f;
+        sample.qy = 0.0f;
+        sample.qz = 0.0f;
+
+        return sample;
+    }
+    private final Runnable simulationRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!SIMULATE_IMU) {
+                return;
+            }
+
+            BLEManager.SensorSample sample = createSimulatedSample();
+
+            // Send simulated data through existing processing code
+            onSample(sample);
+
+            // Generate another sample after 20 milliseconds
+            simulationHandler.postDelayed(this, 20);
+        }
+    };
 }

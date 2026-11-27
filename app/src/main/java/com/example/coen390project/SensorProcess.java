@@ -33,9 +33,6 @@ public class SensorProcess {
         return instance;
     }
 
-
-
-
     public void processSample(BLEManager.SensorSample sample){
 
         if (learning) {
@@ -151,11 +148,6 @@ public class SensorProcess {
         y += vy * dt;
         z += vz * dt;
 
-
-
-
-
-
     }
 
     public void reset(){
@@ -181,7 +173,8 @@ public class SensorProcess {
 
     public void stopLearning() {
         learning = false;
-
+        android.util.Log.d("BarbellBLE",
+                "Learning samples recorded: " + learningSamples.size());
         boolean success = repCounter.learn(learningSamples);
 
         android.util.Log.d("BarbellBLE",

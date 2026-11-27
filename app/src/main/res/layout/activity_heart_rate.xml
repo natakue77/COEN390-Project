@@ -21,12 +21,12 @@
         android:orientation="vertical"
         android:padding="24dp">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="♥"
-            android:textColor="#F06B78"
-            android:textSize="85sp" />
+        <ImageView
+            android:layout_width="85dp"
+            android:layout_height="85dp"
+            android:src="@drawable/img_heart_rate"
+            android:scaleType="fitCenter"
+            android:contentDescription="Heart rate icon" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -38,6 +38,7 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/heartRateValue"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="15dp"
@@ -47,11 +48,12 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/heartRateMessage"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:gravity="center"
-            android:text="Heart rate sensor integration coming soon."
+            android:text="Waiting for heart rate measurements."
             android:textColor="#8F95A1"
             android:textSize="14sp" />
 

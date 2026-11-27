@@ -183,6 +183,20 @@ public class Option2Activity extends AppCompatActivity {
         }
 
         setupDrawer(toolbar);
+        getOnBackPressedDispatcher().addCallback(this,
+                new androidx.activity.OnBackPressedCallback(true) {
+                    @Override
+                    public void handleOnBackPressed() {
+                        if (drawerLayout != null
+                                && drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                            drawerLayout.closeDrawer(GravityCompat.START);
+                        } else {
+                            setEnabled(false);
+                            getOnBackPressedDispatcher().onBackPressed();
+                            setEnabled(true);
+                        }
+                    }
+                });
 
         btnSelectWorkout = findViewById(R.id.btnSelectWorkout);
         btnResetWorkouts = findViewById(R.id.btnResetWorkouts);
@@ -207,7 +221,6 @@ public class Option2Activity extends AppCompatActivity {
         goalGraph = findViewById(R.id.goalGraph);
 
         preferences = getSharedPreferences(PREF_GOALS, MODE_PRIVATE);
-
         loadSavedWorkoutSelections();
 
         completedWorkoutsRef = FirebaseDatabase.getInstance()
@@ -1363,19 +1376,6 @@ public class Option2Activity extends AppCompatActivity {
         );
     }
 
-    // =================================================
-    // BACK BUTTON
-    // =================================================
-
-    @Override
-    public void onBackPressed() {
-        if (drawerLayout != null
-                && drawerLayout.isDrawerOpen(GravityCompat.START)) {
-            drawerLayout.closeDrawer(GravityCompat.START);
-        } else {
-            super.onBackPressed();
-        }
-    }
 
     // =================================================
     // DATA CLASSES
